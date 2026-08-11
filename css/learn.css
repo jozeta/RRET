@@ -1,0 +1,185 @@
+/* ==========================================================================
+   Learn Page & Educational Diagrams CSS
+   ========================================================================== */
+
+.learn-hero {
+  background: linear-gradient(135deg, rgba(82, 99, 72, 0.25) 0%, rgba(20, 24, 28, 0.95) 100%),
+              radial-gradient(circle at top right, rgba(255, 140, 0, 0.1), transparent 60%);
+  border: 1px solid var(--olive-primary);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem;
+  margin-bottom: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.learn-hero::after {
+  content: 'MRAD / MIL';
+  position: absolute;
+  right: -20px;
+  bottom: -20px;
+  font-family: var(--font-tactical);
+  font-size: 7rem;
+  font-weight: 900;
+  color: rgba(255, 255, 255, 0.03);
+  pointer-events: none;
+  line-height: 1;
+}
+
+.diagram-card {
+  background-color: var(--bg-dark-card);
+  border: 1px solid var(--bg-dark-border);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.diagram-box {
+  background-color: #0b0e11;
+  border: 1px solid var(--bg-dark-border);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  position: relative;
+}
+
+.diagram-box svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.comparison-slider-wrapper {
+  background-color: #0c0f12;
+  border: 1px solid var(--bg-dark-border);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  margin: 1.5rem 0;
+}
+
+.worked-example-card {
+  background-color: rgba(207, 167, 110, 0.05);
+  border-left: 4px solid var(--tan-accent);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 1.25rem;
+  margin: 1rem 0;
+}
+
+.quiz-option-btn {
+  background-color: var(--bg-dark-surface);
+  border: 1px solid var(--bg-dark-border);
+  color: var(--text-main);
+  text-align: left;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--radius-sm);
+  width: 100%;
+  margin-bottom: 0.5rem;
+  transition: var(--transition-fast);
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+}
+
+.quiz-option-btn:hover {
+  border-color: var(--tan-accent);
+  background-color: rgba(207, 167, 110, 0.1);
+}
+
+.quiz-option-btn.correct {
+  background-color: rgba(16, 185, 129, 0.2);
+  border-color: var(--success-color);
+  color: #ffffff;
+}
+
+.quiz-option-btn.incorrect {
+  background-color: rgba(239, 68, 68, 0.2);
+  border-color: var(--danger-color);
+  color: #ffffff;
+}
+
+/* 4-Step Protocol Cards */
+.step-card {
+  background-color: var(--bg-dark-surface);
+  border: 1px solid var(--bg-dark-border);
+  border-radius: var(--radius-sm);
+  padding: 1.25rem;
+  position: relative;
+  transition: var(--transition-fast);
+}
+
+.step-card:hover {
+  border-color: var(--tan-accent);
+  transform: translateY(-2px);
+}
+
+.step-card p {
+  color: #cbd5e1 !important; /* High contrast light slate text */
+  line-height: 1.5;
+}
+
+.step-badge {
+  display: inline-block;
+  background-color: var(--olive-primary);
+  color: #ffffff;
+  font-family: var(--font-tactical);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+/* Formula Cards */
+.formula-card {
+  background-color: var(--bg-dark-surface);
+  border: 1px solid var(--bg-dark-border);
+  border-radius: var(--radius-sm);
+  padding: 1.25rem;
+}
+
+.math-formula {
+  background-color: rgba(14, 18, 22, 0.95);
+  border: 1px solid rgba(255, 140, 0, 0.4);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  color: var(--tan-light);
+}
+
+.math-formula.text-muted,
+.math-formula code {
+  color: #e2e8f0 !important;
+}
+
+/* Live Calculator Box */
+.calc-result-box {
+  background: linear-gradient(135deg, rgba(255, 140, 0, 0.08) 0%, rgba(20, 24, 28, 0.95) 100%);
+}
+
+/* Reticle Comparison Grid Cards */
+.reticle-preview-card {
+  background-color: var(--bg-dark-surface);
+  border: 1px solid var(--bg-dark-border);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  height: 100%;
+  transition: var(--transition-fast);
+}
+
+.reticle-preview-card:hover {
+  border-color: var(--orange-highlight);
+  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.15);
+}
+
+.reticle-preview-svg {
+  width: 100%;
+  height: 140px;
+  background-color: #0b0e11;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}

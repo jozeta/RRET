@@ -1,0 +1,601 @@
+/* ==========================================================================
+   Rifle Range Estimation Trainer (RRET) - Primary Design System & UI Styles
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Rajdhani:wght@500;600;700&family=Roboto+Mono:wght@400;500;700&display=swap');
+
+:root {
+  /* Color Palette - Dark Military Precision */
+  --bg-dark-base: #0b0d0f;
+  --bg-dark-surface: #14181c;
+  --bg-dark-card: #1b2126;
+  --bg-dark-card-hover: #222a31;
+  --bg-dark-border: #2a343d;
+  
+  --olive-primary: #526348;
+  --olive-light: #708563;
+  --olive-dark: #374230;
+  
+  --tan-accent: #c9a572;
+  --tan-light: #e6c89c;
+  --tan-dark: #8c6d42;
+  
+  --orange-highlight: #ff8c00;
+  --orange-hover: #ffa033;
+  --orange-glow: rgba(255, 140, 0, 0.25);
+  
+  --text-main: #f0f4f8;
+  --text-muted: #9ba7b4;
+  --text-dim: #8291a3;
+
+  --danger-color: #f87171;
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --info-color: #3b82f6;
+
+  /* Lighter olive tuned specifically for text on dark surfaces; --olive-light
+     itself (#708563) is kept for borders/gradients where the darker tone reads fine,
+     but at ~3.6:1 it fails WCAG AA for text, so badges/labels use this instead. */
+  --olive-text: #9fc98a;
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-tactical: 'Rajdhani', sans-serif;
+  --font-mono: 'Roboto Mono', monospace;
+
+  /* Radius & Shadows */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.4);
+  --shadow-glow: 0 0 20px rgba(255, 140, 0, 0.15);
+  
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+}
+
+/* Global Reset & Base */
+body {
+  background-color: var(--bg-dark-base);
+  color: var(--text-main);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+h1, h2, h3, h4, h5, h6, .tactical-font {
+  font-family: var(--font-tactical);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+}
+
+.mono-font {
+  font-family: var(--font-mono);
+}
+
+/* Navigation Bar */
+.navbar-tactical {
+  background-color: rgba(20, 24, 28, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--bg-dark-border);
+  padding: 0.75rem 1.5rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  position: sticky;
+  top: 0;
+  z-index: 1050;
+}
+
+.navbar-brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: var(--font-tactical);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--text-main) !important;
+  text-decoration: none;
+}
+
+.brand-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--orange-highlight) 20%, var(--olive-primary) 80%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--tan-accent);
+  box-shadow: 0 0 10px var(--orange-glow);
+}
+
+.brand-icon svg {
+  width: 20px;
+  height: 20px;
+  fill: #ffffff;
+}
+
+.brand-badge {
+  font-size: 0.65rem;
+  background-color: var(--olive-primary);
+  color: var(--tan-light);
+  padding: 2px 6px;
+  border-radius: 4px;
+  vertical-align: middle;
+  margin-left: 6px;
+  letter-spacing: 1px;
+}
+
+.nav-link-tactical {
+  color: var(--text-muted) !important;
+  font-family: var(--font-tactical);
+  font-size: 1.05rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem !important;
+  border-radius: var(--radius-sm);
+  transition: var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nav-link-tactical:hover {
+  color: var(--tan-light) !important;
+  background-color: rgba(207, 167, 110, 0.1);
+}
+
+.nav-link-tactical.active {
+  color: var(--orange-highlight) !important;
+  background-color: rgba(255, 140, 0, 0.12);
+  border-left: 3px solid var(--orange-highlight);
+}
+
+/* Page Section View Switcher */
+.page-view {
+  display: none;
+  animation: fadeIn 0.3s ease-in-out forwards;
+}
+
+.page-view.active {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Custom Tactical Cards */
+.card-tactical {
+  background-color: var(--bg-dark-card);
+  border: 1px solid var(--bg-dark-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition: var(--transition-normal);
+}
+
+.card-tactical:hover {
+  border-color: rgba(207, 167, 110, 0.3);
+}
+
+.card-header-tactical {
+  background-color: rgba(34, 42, 49, 0.6);
+  border-bottom: 1px solid var(--bg-dark-border);
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title-tactical {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--tan-light);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Custom Buttons */
+.btn-tactical {
+  font-family: var(--font-tactical);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  padding: 0.6rem 1.25rem;
+  border-radius: var(--radius-sm);
+  transition: var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btn-tactical-primary {
+  background: linear-gradient(135deg, var(--orange-highlight), #d47000);
+  color: #ffffff;
+  border: none;
+  box-shadow: 0 4px 12px var(--orange-glow);
+}
+
+.btn-tactical-primary:hover, .btn-tactical-primary:focus {
+  background: linear-gradient(135deg, var(--orange-hover), var(--orange-highlight));
+  color: #ffffff;
+  box-shadow: 0 6px 18px rgba(255, 140, 0, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-tactical-olive {
+  background: linear-gradient(135deg, var(--olive-primary), var(--olive-dark));
+  color: var(--text-main);
+  border: 1px solid var(--olive-light);
+}
+
+.btn-tactical-olive:hover {
+  background: linear-gradient(135deg, var(--olive-light), var(--olive-primary));
+  color: #ffffff;
+}
+
+.btn-tactical-outline {
+  background: transparent;
+  color: var(--tan-accent);
+  border: 1px solid var(--tan-accent);
+}
+
+.btn-tactical-outline:hover {
+  background: rgba(207, 167, 110, 0.15);
+  color: var(--tan-light);
+}
+
+.btn-tactical-secondary {
+  background-color: var(--bg-dark-border);
+  color: var(--text-main);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.btn-tactical-secondary:hover {
+  background-color: #384552;
+  color: #ffffff;
+}
+
+/* Stat Widgets */
+.stat-box {
+  background: linear-gradient(145deg, #181f25, #12161a);
+  border: 1px solid var(--bg-dark-border);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--olive-primary), var(--tan-accent));
+}
+
+.stat-box.highlight::before {
+  background: linear-gradient(90deg, var(--orange-highlight), var(--tan-accent));
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  font-family: var(--font-tactical);
+  margin-bottom: 0.35rem;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-main);
+  font-family: var(--font-mono);
+  line-height: 1;
+}
+
+.stat-subtext {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-top: 0.35rem;
+}
+
+/* Inputs & Form Controls */
+.form-control-tactical, .form-select-tactical {
+  background-color: #0e1215;
+  border: 1px solid var(--bg-dark-border);
+  color: var(--text-main);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 1rem;
+  font-family: var(--font-mono);
+  transition: var(--transition-fast);
+}
+
+.form-control-tactical:focus, .form-select-tactical:focus {
+  background-color: #12171c;
+  border-color: var(--orange-highlight);
+  color: #ffffff;
+  box-shadow: 0 0 10px var(--orange-glow);
+  outline: none;
+}
+
+.form-select-tactical option {
+  background-color: var(--bg-dark-card);
+  color: var(--text-main);
+}
+
+/* Badges & Tags */
+.badge-tactical {
+  font-family: var(--font-tactical);
+  font-size: 0.75rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+/* Solid (not translucent) badge backgrounds: these badges get placed over both
+   dark card surfaces and the light target-preview-box paper background, so their
+   contrast can't depend on what's showing through — they need to carry it themselves. */
+.badge-olive {
+  background-color: #33402c;
+  color: var(--olive-text);
+  border: 1px solid var(--olive-primary);
+}
+
+.badge-tan {
+  background-color: #3d3120;
+  color: var(--tan-light);
+  border: 1px solid var(--tan-accent);
+}
+
+.badge-orange {
+  background-color: #4a2f14;
+  color: var(--orange-highlight);
+  border: 1px solid var(--orange-highlight);
+}
+
+/* Modal styling */
+.modal-content-tactical {
+  background-color: var(--bg-dark-surface);
+  border: 1px solid var(--tan-accent);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+}
+
+.modal-header-tactical {
+  border-bottom: 1px solid var(--bg-dark-border);
+  background-color: var(--bg-dark-card);
+  padding: 1rem 1.5rem;
+}
+
+.modal-footer-tactical {
+  border-top: 1px solid var(--bg-dark-border);
+  background-color: var(--bg-dark-card);
+  padding: 1rem 1.5rem;
+}
+
+/* .modal-dialog-scrollable's fixed-header/scrollable-body/fixed-footer layout
+   only works when .modal-header/.modal-body/.modal-footer are direct flex
+   children of .modal-content. The target editor wraps its body+footer in a
+   <form> for submission, which breaks that: .modal-content's overflow:hidden
+   was clipping the footer (and its Save button) off entirely once the form grew
+   taller than the viewport. display:contents removes the form's own box from
+   layout without affecting its DOM structure or submit behavior, so its children
+   become direct flex participants again exactly as Bootstrap expects. */
+#target-modal form {
+  display: contents;
+}
+
+/* Custom Target Drawing Canvas */
+.btn-draw-tool {
+  background-color: var(--bg-dark-surface);
+  border: 1px solid var(--bg-dark-border);
+  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.7rem;
+  font-size: 0.95rem;
+  line-height: 1;
+  transition: var(--transition-fast);
+}
+
+.btn-draw-tool:hover {
+  border-color: var(--tan-accent);
+  color: var(--tan-light);
+}
+
+.btn-draw-tool.active {
+  background-color: var(--orange-highlight);
+  border-color: var(--orange-highlight);
+  color: #ffffff;
+}
+
+.draw-color-swatch {
+  width: 42px;
+  height: 38px;
+  padding: 2px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--bg-dark-border);
+  background: transparent;
+  cursor: pointer;
+}
+
+.target-draw-canvas {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+  /* Checkerboard = "this is transparent," standard image-editor convention. The
+     canvas's own pixel data is real alpha transparency (see drawing.js); this is
+     just what shows through it while editing. */
+  background-image:
+    linear-gradient(45deg, #3a3f44 25%, transparent 25%, transparent 75%, #3a3f44 75%, #3a3f44),
+    linear-gradient(45deg, #3a3f44 25%, #2a2e32 25%, #2a2e32 75%, #3a3f44 75%, #3a3f44);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--bg-dark-border);
+  cursor: crosshair;
+  touch-action: none;
+}
+
+/* Target Grid & Cards */
+.target-card {
+  background-color: var(--bg-dark-card);
+  border: 1px solid var(--bg-dark-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  transition: var(--transition-normal);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.target-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--tan-accent);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+}
+
+.target-preview-box {
+  height: 180px;
+  /* Real Swedish target sheets are dark ink on light paper — most of these SVG
+     targets fill with a near-black color, which was nearly invisible against the
+     previous near-black (#0a0d0f) box. A light "paper" tone gives them the same
+     contrast the physical targets actually have. */
+  background-color: #ddd6c4;
+  background-image:
+    radial-gradient(circle, rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+  background-size: 16px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 1rem;
+  border-bottom: 1px solid var(--bg-dark-border);
+}
+
+.target-preview-box svg, .target-preview-box img {
+  max-height: 140px;
+  max-width: 140px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 5px rgba(0,0,0,0.35));
+}
+
+.target-card-body {
+  padding: 1.25rem;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.target-specs {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  background-color: rgba(0, 0, 0, 0.3);
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  margin-top: auto;
+}
+
+/* Step Breakdown Table / Card */
+.calculation-box {
+  background: #0d1114;
+  border: 1px dashed var(--tan-accent);
+  border-radius: var(--radius-md);
+  padding: 1.25rem;
+  margin-top: 1rem;
+}
+
+.math-formula {
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+  color: var(--orange-highlight);
+  background-color: rgba(255, 140, 0, 0.1);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  text-align: center;
+  margin: 0.75rem 0;
+  border-left: 4px solid var(--orange-highlight);
+}
+
+/* Footer */
+footer {
+  margin-top: auto;
+  background-color: rgba(14, 18, 21, 0.95);
+  border-top: 1px solid var(--bg-dark-border);
+  padding: 1.5rem 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+}
+
+/* ==========================================================================
+   Contrast Fixes: this app uses raw Bootstrap utility classes (.text-muted,
+   .text-success, .text-danger, .alert-dark, etc.) throughout index.html
+   without a Bootstrap dark-mode default (fixed globally by data-bs-theme="dark"
+   on <html>), but a few still need brand-specific / guaranteed-AA colors.
+   ========================================================================== */
+.text-muted {
+  color: var(--text-muted) !important;
+}
+
+.text-success {
+  color: var(--success-color) !important;
+}
+
+.text-danger {
+  color: var(--danger-color) !important;
+}
+
+.text-warning {
+  color: var(--warning-color) !important;
+}
+
+.btn-outline-danger {
+  --bs-btn-color: var(--danger-color);
+  --bs-btn-border-color: var(--danger-color);
+  --bs-btn-hover-bg: var(--danger-color);
+  --bs-btn-hover-border-color: var(--danger-color);
+}
+
+.alert-dark {
+  background-color: var(--bg-dark-surface);
+  color: var(--text-main);
+  border-color: var(--bg-dark-border);
+}
+
+.form-control-tactical::placeholder,
+.form-control-tactical::-webkit-input-placeholder {
+  color: var(--text-dim);
+  opacity: 1;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .stat-value {
+    font-size: 1.5rem;
+  }
+  .navbar-brand-logo {
+    font-size: 1.1rem;
+  }
+  .btn-tactical {
+    padding: 0.5rem 0.85rem;
+    font-size: 0.85rem;
+  }
+}
