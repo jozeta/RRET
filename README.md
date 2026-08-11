@@ -1,10 +1,13 @@
 # Rifle Range Estimation Trainer (RRET)
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-jozeta.github.io%2FRRET-success.svg)](https://jozeta.github.io/RRET/)
 [![FFP MIL Scope Simulator](https://img.shields.io/badge/Optics-FFP_MIL%2FMRAD-orange.svg)](#)
 [![Target Library](https://img.shields.io/badge/Targets-86_Built--in-blue.svg)](#)
 [![Stack](https://img.shields.io/badge/Stack-HTML5_|_CSS3_|_ES6_JS-green.svg)](#)
 
 **RRET (Rifle Range Estimation Trainer)** is a modern, high-precision First Focal Plane (FFP) scope simulator and distance estimation interactive web application. Designed for precision shooters, field competitors, snipers, and long-range enthusiasts, RRET provides real-world field scenarios to train distance estimation using MIL/MRAD reticle subtensions.
+
+**🔗 Try it live: [jozeta.github.io/RRET](https://jozeta.github.io/RRET/)** — no install or setup required, runs entirely in your browser.
 
 ---
 
@@ -68,6 +71,8 @@ $$\text{Distance (yards)} = \frac{\text{Target Size (yards)} \times 1000}{\text{
 ---
 
 ## 🚀 Quick Start / Local Installation
+
+Just want to try it? Skip all of this and use the **[live demo](https://jozeta.github.io/RRET/)** instead. The steps below are only for running it locally (e.g. to make changes).
 
 RRET is built as a zero-dependency, client-side web application using HTML5, CSS3, and ES6 JavaScript modules.
 
