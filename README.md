@@ -77,7 +77,7 @@ Because JavaScript ES6 modules (`import/export`) and JSON `fetch()` require HTTP
 
 1. Clone or download the repository:
    ```bash
-   git clone https://github.com/your-repo/RRET.git
+   git clone https://github.com/jozeta/RRET.git
    cd RRET
    ```
 
