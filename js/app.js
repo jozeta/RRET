@@ -10,6 +10,7 @@ import { TrainingManager } from './training.js';
 import { TutorialController } from './tutorial.js';
 import { StationController } from './station.js';
 import { AnalyticsController } from './analytics.js';
+import { ReticleHelp } from './reticle-help.js';
 import { loadReticles } from './reticles.js';
 import { sfx, escapeHTML } from './utils.js';
 import { formatDistance } from './scenario-logic.js';
@@ -30,6 +31,7 @@ class Application {
     this.station = new StationController(this);
     this.tutorial = new TutorialController(this);
     this.analytics = new AnalyticsController(this);
+    this.reticleHelp = new ReticleHelp(this);
   }
 
   async init() {
@@ -57,6 +59,7 @@ class Application {
     this.station.init();
     this.tutorial.init();
     this.analytics.init();
+    this.reticleHelp.init();
 
     this.updateOpticsNote();
 

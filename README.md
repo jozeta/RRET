@@ -40,15 +40,15 @@
 - **Custom Target Builder**: Create custom targets by specifying height, width, an optional preferred distance range, and a description, then define their appearance from a preset shape, a freehand drawing (pen, line, rectangle, ellipse, eraser tools), or an uploaded image. Existing custom targets can be edited or duplicated.
 - **JSON Import / Export**: Export your custom targets and import them on another device. Imports are validated, size-limited and idempotent: re-importing the same file updates targets instead of duplicating them, and built-in targets are never duplicated.
 
-### 4. Multiple Reticle Patterns
-- **MIL Dot Reticle**
-- **Christmas Tree Grid**
-- **Tremor Tactical**
-- **MRAD Grid**
-- **Duplex BDC**
-- **German #4**
-- **Circle-Dot Horseshoe**
-- **Fine Crosshair**
+### 4. Reticles, with built-in help
+Twelve first focal plane reticles drawn with real etched line widths, black by default (illumination optional). Each has a help panel with a drawing, a worked example and step-by-step ranging instructions:
+- **Mil-dot**: dots 1 MIL apart
+- **MIL hash (½ MIL)**: long hash every MIL, short hash every ½ MIL
+- **Fine milling (0.2 MIL)**: a hash every 0.2 MIL
+- **Ranging scale (0.1 MIL)**: L-shaped bracket graduated in 0.1 MIL
+- **Christmas-tree grid**, **Grid tree with 0.2 MIL ruler**, **Square MIL grid**
+- **Rangefinder curve (1.7 m)**: PSO-1-style stadiametric curve, no arithmetic needed
+- **Duplex with BDC**, **German #4**, **Circle-dot**, **Fine crosshair**
 
 ### 5. Interactive Learning Hub & Math Practice
 - Step-by-step tutorial explaining **MIL subtension math**, height/width measurement, and distance formulas.

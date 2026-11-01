@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { ScopeEngine } from '../js/scope.js';
+import { RETICLE_DESIGNS, RETICLE_CATALOG, reticleItems, reticleSVG } from '../js/reticle-designs.js';
 import { TARGET_CATEGORIES, CUSTOM_TARGET_SHAPES } from '../js/targets.js';
 import { diagnoseEstimate } from '../js/coach.js';
 import { computeAnalytics, bandOf } from '../js/analytics.js';
@@ -10,39 +10,78 @@ import { ART_TYPES } from '../js/target-art.js';
 const hasRenderer = (t) => ART_TYPES.has(t) || utilsSrc.includes(`case '${t}'`);
 
 const targets = JSON.parse(readFileSync(new URL('../data/targets.json', import.meta.url)));
-const reticles = JSON.parse(readFileSync(new URL('../data/reticles.json', import.meta.url)));
+const reticles = RETICLE_CATALOG;
 const utilsSrc = readFileSync(new URL('../js/utils.js', import.meta.url), 'utf8');
 
-// Reticle generators only use helper methods, so they run without a DOM.
-const engine = Object.create(ScopeEngine.prototype);
-const PX = 100; // px per MIL
-const C = 500;
+// Reticle geometry is pure MIL data: positions are checked exactly.
+const HI = 200; // px per MIL: high magnification, every subdivision drawn
+const ticksOnHorizontal = (id, ppm = HI) => [...new Set(reticleItems(id, ppm)
+  .filter(it => it.t === 'line' && it.kind === 'tick' && Math.abs(it.x1 - it.x2) < 1e-9 && it.y1 <= 0 && it.y2 >= 0 && it.x1 > 0)
+  .map(it => +it.x1.toFixed(6)))].sort((a, b) => a - b);
+const near = (a, b) => Math.abs(a - b) < 1e-6;
 
-function verticalTickXs(svg, y = C) {
-  // x positions of short vertical lines crossing the horizontal axis
-  const xs = new Set();
-  for (const m of svg.matchAll(/<line x1="([\d.-]+)" y1="([\d.-]+)" x2="([\d.-]+)" y2="([\d.-]+)"/g)) {
-    const [x1, y1, x2, y2] = m.slice(1).map(Number);
-    if (x1 === x2 && y1 < y && y2 > y && y2 - y1 < 40) xs.add(+(x1 - C).toFixed(6));
+test('Tremor-style ruler has a tick every 0.2 MIL out to 3.0 MIL (BUG-008)', () => {
+  assert.deepEqual(ticksOnHorizontal('tremor_style'), Array.from({ length: 15 }, (_, k) => +((k + 1) / 5).toFixed(6)));
+});
+
+test('mil-dot dots sit exactly 1 MIL apart, posts start at 5 MIL', () => {
+  const items = reticleItems('mil_dot', HI);
+  const dots = items.filter(it => it.t === 'dot' && it.y === 0 && it.x > 0).map(it => it.x).sort((a, b) => a - b);
+  assert.deepEqual(dots, [1, 2, 3, 4]);
+  const posts = items.filter(it => it.kind === 'post');
+  assert.ok(posts.some(p => near(p.x2, -5) || near(p.x1, 5)));
+});
+
+test('½-MIL hash reticle: hashes every 0.5 MIL to 10 MIL', () => {
+  assert.deepEqual(ticksOnHorizontal('mil_hash'), Array.from({ length: 20 }, (_, k) => (k + 1) / 2));
+});
+
+test('fine milling reticle: 0.2 MIL hashes at high power, hidden when they would merge', () => {
+  assert.equal(ticksOnHorizontal('fine_milling').length, 50);
+  const low = ticksOnHorizontal('fine_milling', 10); // 0.2 MIL = 2 px: too close
+  assert.deepEqual(low, Array.from({ length: 10 }, (_, k) => k + 1));
+});
+
+test('ranging scale: 50 graduations of 0.1 MIL above the zero bar', () => {
+  const items = reticleItems('ranging_ladder', HI).filter(it => it.kind === 'tick' && near(it.x1, -7) && it.x2 > -7);
+  const heights = items.map(it => +(6 - it.y1).toFixed(6)).sort((a, b) => a - b);
+  assert.deepEqual(heights, Array.from({ length: 50 }, (_, k) => +((k + 1) / 10).toFixed(6)));
+});
+
+test('rangefinder curve: gap above the baseline equals 1.7 m at each marked distance', () => {
+  const items = reticleItems('pso1_rangefinder', HI);
+  const curve = items.find(it => it.t === 'path' && it.points.length > 50);
+  const xOf = (d) => -10 + ((d - 200) / 800) * 8;
+  for (const d of [200, 300, 400, 600, 800, 1000]) {
+    const pt = curve.points.find(([x]) => near(x, xOf(d)));
+    assert.ok(pt, `no curve point at ${d} m`);
+    assert.ok(near(5 - pt[1], 1700 / d), `${d} m: gap ${5 - pt[1]} MIL, expected ${1700 / d}`);
   }
-  return [...xs].sort((a, b) => a - b);
-}
-
-test('Tremor reticle has fine ticks every 0.2 MIL out to 3.0 MIL (BUG-008)', () => {
-  const xs = verticalTickXs(engine.generateTremorStyleSVG(C, PX, '#f00')).filter(x => x > 0 && x <= 3 * PX + 1e-6);
-  const expected = Array.from({ length: 15 }, (_, k) => +(((k + 1) / 5) * PX).toFixed(6));
-  assert.deepEqual(xs, expected);
 });
 
-test('MIL-dot hashes sit at exact half-MIL positions', () => {
-  const xs = verticalTickXs(engine.generateMILDotSVG(C, PX, '#f00')).filter(x => x > 0);
-  for (const x of xs) assert.ok(Math.abs((x / PX) * 2 - Math.round((x / PX) * 2)) < 1e-9, `${x / PX} MIL`);
-  assert.ok(xs.includes(0.5 * PX) && xs.includes(9.5 * PX));
+test('every reticle has complete help and a correct worked example', () => {
+  for (const d of RETICLE_DESIGNS) {
+    assert.ok(d.summary.length > 40, `${d.id} summary`);
+    assert.ok(d.marks.length >= 2 && d.measure.length >= 3, `${d.id} help lists`);
+    assert.ok(/MIL/.test(d.scale), `${d.id} scale`);
+    const ex = d.example;
+    assert.ok(ex && ex.note, `${d.id} example`);
+    if (ex.rangefinder) continue;
+    const dist = (ex.sizeM * 1000) / ex.mil;
+    const nums = [...ex.note.matchAll(/(\d+(?:\.\d+)?) m\b/g)].map(m => Number(m[1]));
+    assert.ok(nums.some(n => Math.abs(n - dist) <= 1), `${d.id}: note says ${ex.note}, maths gives ${dist.toFixed(1)} m`);
+  }
 });
 
-test('every reticle in reticles.json has a generator', () => {
-  const src = readFileSync(new URL('../js/scope.js', import.meta.url), 'utf8');
-  for (const r of reticles) assert.ok(src.includes(`case '${r.id}'`) || r.id === 'mil_dot', r.id);
+test('reticle SVG renders every design with no NaN and thin lines', () => {
+  for (const d of RETICLE_DESIGNS) {
+    for (const ppm of [2.3, 14, 57, 450]) {
+      const svg = reticleSVG(d.id, { ppm, cx: 300, cy: 300 });
+      assert.ok(!/NaN|undefined/.test(svg), `${d.id} @ ${ppm}`);
+      const widths = [...svg.matchAll(/<line [^>]*stroke-width="([\d.]+)"(?![^>]*butt)/g)].map(m => Number(m[1]));
+      assert.ok(widths.every(w => w >= 0.9 && w <= 3), `${d.id} @ ${ppm}: line widths ${Math.min(...widths)}-${Math.max(...widths)}`);
+    }
+  }
 });
 
 test('targets.json integrity (TEST-007)', () => {
@@ -107,5 +146,6 @@ test('data dimensions match the drawn artwork exactly (animals, people, IPSC)', 
 });
 
 test('every reticle states what its marks are worth', () => {
+  assert.ok(reticles.length >= 12);
   for (const r of reticles) assert.ok(typeof r.scale === 'string' && /MIL/.test(r.scale), `${r.id} has no scale legend`);
 });

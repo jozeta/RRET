@@ -14,14 +14,14 @@ const STORAGE_KEYS = {
   BACKUP: 'rret_backup_v1'
 };
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 export const HISTORY_LIMIT = 1000;
 
 const DEFAULT_SETTINGS = {
   reticle: 'mil_dot',
   unit: 'metric',
   theme: 'dark-tactical',
-  reticleColor: '#ff2a2a',
+  reticleColor: '#111111', // black etched; illuminated colours are options
   reticleBrightness: 1.0,
   zoomSensitivity: 1.0,
   panSensitivity: 1.0,
@@ -112,6 +112,7 @@ export class StorageManager {
     try {
       if (version < 2) this.migrateToV2();
       if (version < 3) this.migrateToV3();
+      if (version < 4) this.migrateToV4();
       localStorage.setItem(STORAGE_KEYS.SCHEMA, String(SCHEMA_VERSION));
     } catch (e) {
       console.warn('Storage migration failed', e);
@@ -128,6 +129,15 @@ export class StorageManager {
     if (!stored || typeof stored !== 'object') return;
     if (stored.opticsMode === 'arcade' || stored.opticsMode === undefined) {
       writeJSON(STORAGE_KEYS.SETTINGS, { ...stored, opticsMode: 'realistic', scopeProfile: 'full' });
+    }
+  }
+
+  /** Schema 4: the default reticle became black (etched). Switch saved settings
+   *  that still hold the old red default, which was never a deliberate choice. */
+  static migrateToV4() {
+    const stored = readJSON(STORAGE_KEYS.SETTINGS, null);
+    if (stored && typeof stored === 'object' && stored.reticleColor === '#ff2a2a') {
+      writeJSON(STORAGE_KEYS.SETTINGS, { ...stored, reticleColor: '#111111' });
     }
   }
 

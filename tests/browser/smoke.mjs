@@ -386,6 +386,21 @@ await check('scope readout states the reticle mark spacing', async () => {
   assert(/25\.0×/.test(hud) && /0\.2 MIL/.test(hud), hud);
 });
 
+await check('every reticle has a help panel with a drawing and steps, and "Use this reticle" selects it', async () => {
+  await load();
+  const ids = await evaluate(`app.reticles.map(r => r.id)`);
+  assert(ids.length >= 12, `only ${ids.length} reticles`);
+  for (const id of ids) {
+    await evaluate(`app.reticleHelp.open('${id}')`);
+    await sleep(350);
+    const r = await evaluate(`({ title: document.getElementById('reticle-help-title').textContent, svg: !!document.querySelector('#reticle-help-body svg line'), steps: document.querySelectorAll('#reticle-help-body ol li').length, marks: document.querySelectorAll('#reticle-help-body ul li').length })`);
+    assert(r.title && r.svg && r.steps >= 3 && r.marks >= 2, `${id}: ${JSON.stringify(r)}`);
+  }
+  await click('#reticle-help-use');
+  await sleep(400);
+  assert(await evaluate(`app.scope.reticleType`) === ids[ids.length - 1], 'reticle not selected');
+});
+
 await check('realistic optics uses the calibration (FEAT-001)', async () => {
   const ppm = await evaluate(`(() => { app.scope.updateSettings({ opticsMode: 'realistic', screenPxPerMm: 4, viewingDistanceCm: 50, scopeProfile: 'precision' }); const v = { ppm: app.scope.pxPerMILAt(10), min: app.scope.minZoom }; app.scope.updateSettings({ opticsMode: 'arcade' }); return v; })()`);
   assert(Math.abs(ppm.ppm - 20) < 1e-9 && ppm.min === 5, JSON.stringify(ppm));

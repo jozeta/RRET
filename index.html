@@ -387,7 +387,7 @@
             <h2 class="h6 mb-2">Scenario options</h2>
             <div class="scope-controls-bar sim-options-grid">
               <div>
-                <label for="sim-reticle-select" class="tactical-font text-muted small d-block">Reticle</label>
+                <div class="d-flex justify-content-between align-items-baseline gap-2"><label for="sim-reticle-select" class="tactical-font text-muted small d-block">Reticle</label><button type="button" class="btn-link-help" data-reticle-help>How it works</button></div>
                 <select id="sim-reticle-select" class="form-select-tactical form-select-sm w-100"></select>
               </div>
               <div>
@@ -790,7 +790,7 @@
 
                 <!-- RETICLE PREFERENCE -->
                 <div class="mb-4">
-                  <label for="settings-reticle" class="form-label tactical-font text-tan-light">Default reticle</label>
+                  <div class="d-flex justify-content-between align-items-baseline gap-2"><label for="settings-reticle" class="form-label tactical-font text-tan-light">Default reticle</label><button type="button" class="btn-link-help" data-reticle-help data-reticle-from="#settings-reticle">How it works</button></div>
                   <select id="settings-reticle" name="reticle-select" class="form-select-tactical w-100">
                     <option value="mil_dot">MIL Dot Reticle</option>
                     <option value="christmas_tree">Christmas Tree Grid (Horner / PRS)</option>
@@ -828,10 +828,11 @@
                   <div class="col-md-6">
                     <label for="settings-reticle-color" class="form-label tactical-font text-tan-light">Reticle illumination</label>
                     <select id="settings-reticle-color" name="reticle-color" class="form-select-tactical w-100">
-                      <option value="#ff2a2a">Tactical Red</option>
-                      <option value="#00ff66">Night Vision Green</option>
-                      <option value="#ffaa00">Amber Gold</option>
-                      <option value="#ffffff">Pure White</option>
+                      <option value="#111111">Black (not illuminated)</option>
+                      <option value="#ff2a2a">Illuminated red</option>
+                      <option value="#00ff66">Illuminated green</option>
+                      <option value="#ffaa00">Illuminated amber</option>
+                      <option value="#ffffff">White</option>
                     </select>
                   </div>
                   <div class="col-md-6">
@@ -1082,6 +1083,26 @@
             <button type="submit" class="btn btn-tactical-primary">Save Target</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- RETICLE HELP -->
+  <div class="modal fade" id="reticle-help-modal" tabindex="-1" aria-labelledby="reticle-help-title" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+      <div class="modal-content modal-content-tactical">
+        <div class="modal-header modal-header-tactical">
+          <div>
+            <h2 class="modal-title h4 mb-0" id="reticle-help-title">Reticle</h2>
+            <div class="small text-muted" id="reticle-help-family"></div>
+          </div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body" id="reticle-help-body"></div>
+        <div class="modal-footer modal-footer-tactical">
+          <button type="button" class="btn btn-tactical btn-tactical-secondary" data-bs-dismiss="modal">Close</button>
+          <button type="button" class="btn btn-tactical btn-tactical-primary" id="reticle-help-use">Use this reticle</button>
+        </div>
       </div>
     </div>
   </div>

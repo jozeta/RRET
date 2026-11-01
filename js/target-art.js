@@ -13,6 +13,22 @@
 
 let gradientCounter = 0;
 
+/**
+ * Surface texture clipped exactly to the silhouette (operator "in" SourceAlpha),
+ * so it adds grain without changing the outline the player measures.
+ * `freq` is in viewBox units (cm for artwork, 1/100 for 100-unit shapes).
+ */
+export function textureFilter(id, { freq = '0.5 0.85', dark = 0.2, light = 0.08, seed = 7 } = {}) {
+  return `<filter id="${id}" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="${freq}" numOctaves="3" seed="${seed}" result="noise"/>
+      <feColorMatrix in="noise" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  ${(-2 * dark).toFixed(3)} 0 0 0 ${dark.toFixed(3)}" result="shadeA"/>
+      <feComposite in="shadeA" in2="SourceAlpha" operator="in" result="shade"/>
+      <feColorMatrix in="noise" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  ${(2 * light).toFixed(3)} 0 0 0 ${(-light).toFixed(3)}" result="lightA"/>
+      <feComposite in="lightA" in2="SourceAlpha" operator="in" result="glint"/>
+      <feMerge><feMergeNode in="SourceGraphic"/><feMergeNode in="shade"/><feMergeNode in="glint"/></feMerge>
+    </filter>`;
+}
+
 function shade(hex, amt) {
   const n = parseInt(hex.slice(1), 16);
   const c = (v) => Math.max(0, Math.min(255, Math.round(v + amt))).toString(16).padStart(2, '0');
@@ -87,7 +103,7 @@ class Art {
   }
 
   /** SVG markup plus the true size in centimetres. */
-  render(color, { outline = true, shadeAmt = 22, stroke = null } = {}) {
+  render(color, { outline = true, shadeAmt = 22, stroke = null, texture = null } = {}) {
     const w = this.x1 - this.x0;
     const h = this.y1 - this.y0;
     const id = `tg${++gradientCounter}`;
@@ -125,15 +141,19 @@ class Art {
     // Outline pass sits under the fills, so only the outer edge shows. The outline
     // extends outlineW beyond the parts; the returned viewBox includes it.
     const inner = outline ? silhouette.map(outlineOf).join('') : '';
+    const tex = texture ? textureFilter(`${id}t`, texture) : '';
+    // Body light from above: a soft sheen across the back, then the base gradient.
     const svg = `
       <defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="0" y1="${r2(-this.y1)}" x2="0" y2="${r2(-this.y0)}">
-        <stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${dark}"/>
-      </linearGradient></defs>
+        <stop offset="0" stop-color="${light}"/><stop offset="0.55" stop-color="${color}"/><stop offset="1" stop-color="${dark}"/>
+      </linearGradient>${tex}</defs>
+      <g${texture ? ` filter="url(#${id}t)"` : ''}>
       ${inner}
       ${this.layers.back.map(p => el(p, p.fill || shade(color, -18))).join('')}
       ${this.layers.body.map(p => el(p)).join('')}
       ${this.layers.detail.map(p => el(p, p.fill)).join('')}
-      ${this.layers.top.map(p => el(p, p.fill)).join('')}`;
+      ${this.layers.top.map(p => el(p, p.fill)).join('')}
+      </g>`;
     // Outline strokes extend outlineW beyond the parts; include them in the box.
     const pad = outline ? outlineW : 0;
     return {
@@ -445,22 +465,26 @@ export function buildArt(type, target = {}) {
   const a = new Art();
   if (SPECIES[type]) {
     SPECIES[type](a);
-    return a.render(color);
+    // Fur: fine, slightly streaky grain (frequency in cycles per cm).
+    const birds = type === 'pheasant' || type === 'turkey';
+    return a.render(color, { texture: birds ? { freq: '1.4 0.8', dark: 0.5, light: 0.22, seed: 11 } : { freq: '0.9 2.4', dark: 0.55, light: 0.2, seed: 5 } });
   }
   switch (type) {
-    case 'soldier_silhouette': soldierFull(a); return a.render(color, { shadeAmt: 10 });
-    case 'soldier_half': soldierHalf(a); return a.render(color, { shadeAmt: 10 });
-    case 'mil_e_type': eType(a); return a.render(color, { shadeAmt: 10 });
+    // Painted plywood/board figures: subtle paint grain.
+    case 'soldier_silhouette': soldierFull(a); return a.render(color, { shadeAmt: 10, texture: { freq: '0.8 1.6', dark: 0.25, light: 0.1 } });
+    case 'soldier_half': soldierHalf(a); return a.render(color, { shadeAmt: 10, texture: { freq: '0.8 1.6', dark: 0.25, light: 0.1 } });
+    case 'mil_e_type': eType(a); return a.render(color, { shadeAmt: 10, texture: { freq: '0.8 1.6', dark: 0.25, light: 0.1 } });
     case 'ipsc_metric':
     case 'ipsc_mini': {
       ipscMetric(a);
-      const out = a.render(color, { outline: false, shadeAmt: 8 });
+      // Corrugated cardboard: fine fibrous grain plus faint vertical flutes.
+      const out = a.render(color, { outline: false, shadeAmt: 8, texture: { freq: '0.25 2.4', dark: 0.35, light: 0.15, seed: 3 } });
       out.svg += PAPER_ZONES.ipsc_metric();
       return out;
     }
     case 'ipsc_classic': {
       ipscMetric(a, { classic: true });
-      const out = a.render(color, { outline: false, shadeAmt: 8 });
+      const out = a.render(color, { outline: false, shadeAmt: 8, texture: { freq: '0.25 2.4', dark: 0.35, light: 0.15, seed: 3 } });
       out.svg += PAPER_ZONES.ipsc_classic();
       return out;
     }
@@ -468,7 +492,8 @@ export function buildArt(type, target = {}) {
       const w = (Number(target.width) || 0.2) * 100;
       const h = (Number(target.height) || 0.25) * 100;
       prsPopper(a, w, h);
-      return a.render(color, { outline: false, shadeAmt: 26 });
+      // Painted steel: smooth paint with faint orange-peel texture.
+      return a.render(color, { outline: false, shadeAmt: 26, texture: { freq: '2.5 2.5', dark: 0.18, light: 0.12, seed: 9 } });
     }
     default: return null;
   }

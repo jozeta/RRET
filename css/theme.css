@@ -350,3 +350,20 @@ main.container-fluid { padding-top: 1.75rem !important; }
 @media (max-width: 575.98px) {
   .scope-hud-badge { font-size: 0.7rem !important; top: 9% !important; max-width: 78%; }
 }
+
+/* ---- Reticle help ------------------------------------------------------- */
+.btn-link-help {
+  background: none; border: 0; padding: 0;
+  color: var(--brass); font-size: 0.8rem; font-weight: 600;
+  text-decoration: underline; text-underline-offset: 3px; text-decoration-color: rgba(201, 165, 90, 0.45);
+}
+.btn-link-help:hover { color: var(--brass-hover); text-decoration-color: currentColor; }
+.reticle-help-figure { margin: 0 0 1rem; }
+.reticle-help-figure svg { display: block; border-radius: var(--radius-m); }
+.reticle-help-figure figcaption { margin-top: 0.5rem; color: var(--ink-2); font-size: 0.9rem; }
+.reticle-help-summary { color: var(--ink); font-size: 1rem; margin-bottom: 1.25rem; }
+.reticle-help-list { padding-left: 1.2rem; margin-bottom: 0; color: var(--ink-2); }
+.reticle-help-list li { margin-bottom: 0.45rem; }
+#reticle-help-modal .h6 { color: var(--ink); font-weight: 650; margin-bottom: 0.6rem; }
+.reticle-preview-svg { background: none !important; border: 0 !important; padding: 0 !important; height: auto !important; }
+.reticle-preview-svg svg { display: block; border-radius: var(--radius-m); }

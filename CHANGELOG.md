@@ -28,6 +28,15 @@ Audit fixes and new training features (pull request #1).
 - The scope readout states what the reticle's marks are worth (for example "25.0× · fine ticks 0.2 MIL"), because at high power the numbered marks are often outside the view. Corrected two reticle descriptions that didn't match the drawn reticle.
 - The landscape is built to real-world scale behind the target: trees, buildings, berms and mountains have real sizes and distances, the horizon is at eye level and the target stands on the ground in front of them.
 
+### Reticles
+- New reticle engine: every reticle is defined in MIL with real etched line widths, drawn thin and crisp at every magnification; fine marks hide when they would merge. Black (non-illuminated) is the new default; illuminated colours remain.
+- 12 reticles, including four new ranging designs: ½ MIL hash, 0.2 MIL fine milling, 0.1 MIL ranging scale, and a PSO-1-style 1.7 m rangefinder curve.
+- Every reticle has a help panel: a drawing with a worked example, what each mark is worth and where it sits, and step-by-step ranging instructions. Available from the simulator, Settings and the Learn page, whose previews now use the same engine.
+
+### Realism
+- Fur, paint, cardboard and steel textures on all targets (clipped to the outline, so sizes are unchanged).
+- Clouds, textured ground, horizon haze, shaded and textured spruce, rock faces, earth berms and concrete facades, all anchored to the world as you pan and zoom.
+
 ### Design
 - New visual identity: spruce and cartridge-brass palette, Archivo variable type, sentence case throughout, calmer panels and segmented controls; a redrawn scope-view hero on Home.
 

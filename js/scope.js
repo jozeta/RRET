@@ -4,6 +4,8 @@
    ========================================================================== */
 
 import { renderTargetSVGString, isSafeImageDataURI, sfx } from './utils.js';
+import { reticleSVG } from './reticle-designs.js';
+import { grainTexture, cloudTexture } from './textures.js';
 
 /** Real-world-ish scope profiles for realistic optics mode (FEAT-001). */
 export const SCOPE_PROFILES = {
@@ -22,6 +24,14 @@ function shadeHex(hex, amt) {
 
 /** Shooter's eye height above the ground plane (prone/sitting field position). */
 export const EYE_HEIGHT_M = 1.0;
+
+/** Cloud cover per environment (cover: higher = fewer clouds; alpha: opacity). */
+const CLOUDS = {
+  forest: { cover: 0.55, alpha: 0.75 }, field: { cover: 0.58, alpha: 0.8 }, snow: { cover: 0.42, alpha: 0.7, tint: [236, 240, 245] },
+  mountain: { cover: 0.5, alpha: 0.75 }, desert: { cover: 0.68, alpha: 0.6 }, urban: { cover: 0.4, alpha: 0.6, tint: [205, 210, 214] },
+  range: { cover: 0.56, alpha: 0.75 }, rain: { cover: 0.25, alpha: 0.85, tint: [96, 104, 112] },
+  dusk: { cover: 0.5, alpha: 0.7, tint: [246, 170, 140] }
+};
 
 /** Sky and ground colours plus ground texture per environment. */
 const ENV_STYLES = {
@@ -72,7 +82,7 @@ export class ScopeEngine {
 
     // Display / reticle settings
     this.reticleType = 'mil_dot';
-    this.reticleColor = '#ff2a2a';
+    this.reticleColor = '#111111';
     this.reticleBrightness = 1.0;
     this.zoomSensitivity = 1.0;
     this.panSensitivity = 1.0;
@@ -468,6 +478,7 @@ export class ScopeEngine {
       sky.addColorStop(1, style.sky[1]);
       ctx.fillStyle = sky;
       ctx.fillRect(0, 0, w, Math.min(h, horizonY));
+      this.drawClouds(w, horizonY);
     }
     // Ground: lighter/hazier at the horizon, darker towards the shooter.
     if (horizonY < h) {
@@ -477,14 +488,103 @@ export class ScopeEngine {
       ground.addColorStop(1, style.ground[1]);
       ctx.fillStyle = ground;
       ctx.fillRect(0, Math.max(0, horizonY), w, h - Math.max(0, horizonY));
+      this.drawGroundTexture(w, h, horizonY);
     }
 
     // Everything else is drawn far-to-near so nearer things overlap farther ones.
     const items = [];
     this.buildEnvironmentLayers(items, d);
     this.buildGroundTexture(items, d, style);
+    // Atmospheric haze softens the horizon and everything far away.
+    items.push({ dist: 2500, draw: () => this.drawHaze(w, h, horizonY, style) });
     items.sort((a, b) => b.dist - a.dist);
     for (const item of items) item.draw();
+  }
+
+  /** A repeating texture anchored to the world: it pans and zooms with the scene. */
+  worldPattern(tex, tileMIL, squash = 1, anchorY = null) {
+    const { mx, ppm, horizonY } = this.scene;
+    const pat = this.ctx.createPattern(tex, 'repeat');
+    const s = (tileMIL * ppm) / tex.width;
+    if (pat.setTransform) pat.setTransform(new DOMMatrix([s, 0, 0, s * squash, mx(0), anchorY ?? horizonY]));
+    return pat;
+  }
+
+  drawClouds(w, horizonY) {
+    const cfg = CLOUDS[this.environment];
+    if (!cfg || horizonY <= 0) return;
+    const ctx = this.ctx;
+    const { ppm } = this.scene;
+    const tex = cloudTexture(this.environment, { cover: cfg.cover, tint: cfg.tint || [255, 255, 255] });
+    // Cloud deck from 3 MIL to 60 MIL above the horizon, one tile 180 MIL wide.
+    const top = Math.max(0, horizonY - 60 * ppm);
+    const bottom = horizonY - 3 * ppm;
+    if (bottom <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = cfg.alpha;
+    ctx.fillStyle = this.worldPattern(tex, 360, 0.2, horizonY);
+    ctx.fillRect(0, top, w, bottom - top);
+    // fade the deck out towards the horizon
+    const fade = ctx.createLinearGradient(0, horizonY - 14 * ppm, 0, bottom);
+    fade.addColorStop(0, 'rgba(0,0,0,0)');
+    fade.addColorStop(1, 'rgba(0,0,0,1)');
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = fade;
+    ctx.fillRect(0, Math.max(top, horizonY - 14 * ppm), w, bottom - Math.max(top, horizonY - 14 * ppm));
+    ctx.restore();
+    // destination-out cut the sky too; repaint sky behind the faded band
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-over';
+    const style = ENV_STYLES[this.environment] || ENV_STYLES.forest;
+    ctx.fillStyle = style.sky[1];
+    ctx.fillRect(0, Math.max(0, horizonY - 14 * ppm), w, horizonY - Math.max(0, horizonY - 14 * ppm));
+    ctx.restore();
+  }
+
+  /** Two scales of colour variation in the ground (patches and fine grain). */
+  drawGroundTexture(w, h, horizonY) {
+    if (horizonY >= h) return;
+    const ctx = this.ctx;
+    const top = Math.max(0, horizonY);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, top, w, h - top);
+    ctx.clip();
+    ctx.globalCompositeOperation = 'soft-light';
+    ctx.globalAlpha = 0.38;
+    ctx.fillStyle = this.worldPattern(grainTexture('ground-coarse', { base: 3, octaves: 4, seed: 21, contrast: 1.2 }), 70, 0.5);
+    ctx.fillRect(0, top, w, h - top);
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = this.worldPattern(grainTexture('ground-fine', { base: 8, octaves: 3, seed: 22, contrast: 1.1 }), 3, 0.5);
+    ctx.fillRect(0, top, w, h - top);
+    ctx.restore();
+  }
+
+  drawHaze(w, h, horizonY, style) {
+    const ctx = this.ctx;
+    const band = Math.max(18, h * 0.09);
+    const g = ctx.createLinearGradient(0, horizonY - band * 1.6, 0, horizonY + band * 0.6);
+    const sky = style.sky[1];
+    g.addColorStop(0, `${sky}00`);
+    g.addColorStop(0.72, `${sky}8c`);
+    g.addColorStop(1, `${sky}00`);
+    ctx.save();
+    ctx.fillStyle = g;
+    ctx.fillRect(0, horizonY - band * 1.6, w, band * 2.2);
+    ctx.restore();
+  }
+
+  /** Overlay a world-anchored grain texture inside `path` (foliage, rock). */
+  textureInside(path, tex, tileMIL, alpha) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.clip(path);
+    ctx.globalCompositeOperation = 'soft-light';
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = this.worldPattern(tex, tileMIL, 1);
+    ctx.fillRect(0, 0, this.scene.w, this.scene.h);
+    ctx.restore();
   }
 
   /** Iterates items spaced `spacingM` apart along a line `distM` meters away. */
@@ -626,6 +726,8 @@ export class ScopeEngine {
     const baseY = this.groundYAt(dist);
     const milPerM = 1000 / dist;
     const isHex = /^#[0-9a-f]{6}$/i.test(color);
+    const all = new Path2D();
+    const shadow = new Path2D();
     ctx.save();
     ctx.globalAlpha = alpha;
     this.forEachInLayer(dist, spacingM, salt, maxH * 0.25 * milPerM, (xMIL, seed, i) => {
@@ -647,18 +749,28 @@ export class ScopeEngine {
         left.push([cx - wTier, y + treeH * 0.018], [cx - wTier * 0.45, y - treeH * 0.012]);
         right.push([cx + wTier, y + treeH * 0.018], [cx + wTier * 0.45, y - treeH * 0.012]);
       }
-      ctx.beginPath();
-      ctx.moveTo(cx, baseY - treeH);
-      right.forEach(([x, y]) => ctx.lineTo(x, y));
-      ctx.lineTo(cx + treeH * 0.012, baseY - trunk);
-      ctx.lineTo(cx + treeH * 0.012, baseY);
-      ctx.lineTo(cx - treeH * 0.012, baseY);
-      ctx.lineTo(cx - treeH * 0.012, baseY - trunk);
-      for (let k = left.length - 1; k >= 0; k--) ctx.lineTo(left[k][0], left[k][1]);
-      ctx.closePath();
-      ctx.fill();
+      const tree = new Path2D();
+      tree.moveTo(cx, baseY - treeH);
+      right.forEach(([x, y]) => tree.lineTo(x, y));
+      tree.lineTo(cx + treeH * 0.012, baseY - trunk);
+      tree.lineTo(cx + treeH * 0.012, baseY);
+      tree.lineTo(cx - treeH * 0.012, baseY);
+      tree.lineTo(cx - treeH * 0.012, baseY - trunk);
+      for (let k = left.length - 1; k >= 0; k--) tree.lineTo(left[k][0], left[k][1]);
+      tree.closePath();
+      ctx.fill(tree);
+      all.addPath(tree);
+      // shaded side: the right half of each tree a little darker
+      shadow.moveTo(cx, baseY - treeH);
+      right.forEach(([x, y]) => shadow.lineTo(x, y));
+      shadow.lineTo(cx, baseY);
+      shadow.closePath();
     });
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+    ctx.fill(shadow);
     ctx.restore();
+    // needle texture: a 2 m tile at this distance
+    this.textureInside(all, grainTexture('foliage', { base: 8, octaves: 4, seed: 31, contrast: 2 }), 2000 / dist, 0.55 * alpha);
   }
 
   /** Mountain / dune silhouette at `dist` meters, peak heights in meters. */
@@ -672,15 +784,17 @@ export class ScopeEngine {
       pts.push([mx(xMIL), baseY - (minH + seed * (maxH - minH)) * milPerM * ppm]);
     });
     if (pts.length < 2) return;
+    const ridge = new Path2D();
+    ridge.moveTo(Math.min(0, pts[0][0]), baseY + 2);
+    pts.forEach(([x, y]) => ridge.lineTo(x, y));
+    ridge.lineTo(Math.max(w, pts[pts.length - 1][0]), baseY + 2);
+    ridge.closePath();
     ctx.save();
     ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.moveTo(Math.min(0, pts[0][0]), baseY + 2);
-    pts.forEach(([x, y]) => ctx.lineTo(x, y));
-    ctx.lineTo(Math.max(w, pts[pts.length - 1][0]), baseY + 2);
-    ctx.closePath();
-    ctx.fill();
+    ctx.fill(ridge);
     ctx.restore();
+    // rock / slope texture at a ~60 m tile for this distance
+    this.textureInside(ridge, grainTexture('rock', { base: 4, octaves: 5, seed: 41, contrast: 1.4 }), 90000 / dist, 0.32);
   }
 
   drawBuildings(dist, salt, color, alpha) {
@@ -688,6 +802,7 @@ export class ScopeEngine {
     const { mx, ppm, w, h } = this.scene;
     const baseY = this.groundYAt(dist);
     const k = (1000 / dist) * ppm; // screen px per meter at this distance
+    const facades = new Path2D();
     ctx.save();
     ctx.globalAlpha = alpha;
     this.forEachInLayer(dist, 24, salt, 30 * 1000 / dist, (xMIL, seed, i) => {
@@ -697,6 +812,11 @@ export class ScopeEngine {
       if (left + bW < 0 || left > w || baseY - bH > h) return;
       ctx.fillStyle = color;
       ctx.fillRect(left, baseY - bH, bW, bH);
+      facades.rect(left, baseY - bH, bW, bH);
+      // light falls from the left: shade the right third of each block
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+      ctx.fillRect(left + bW * 0.66, baseY - bH, bW * 0.34, bH);
+      ctx.fillStyle = color;
       // Windows: 1.2 x 1.5 m, one floor every 3.2 m, every 3 m across.
       if (k * 1.2 < 1.5) return;
       ctx.fillStyle = 'rgba(255, 200, 120, 0.5)';
@@ -712,6 +832,7 @@ export class ScopeEngine {
       }
     });
     ctx.restore();
+    this.textureInside(facades, grainTexture('concrete', { base: 6, octaves: 4, seed: 61, contrast: 1.3 }), 6000 / dist, 0.4);
   }
 
   /** Earth backstop berm, 4.5 m high, behind the target. */
@@ -740,6 +861,10 @@ export class ScopeEngine {
     ctx.closePath();
     ctx.fill();
     ctx.restore();
+    // packed-earth texture, 3 m tile at the berm's distance
+    const berm = new Path2D();
+    berm.rect(0, top - 0.4 * k, w, baseY - top + 0.4 * k);
+    this.textureInside(berm, grainTexture('earth', { base: 5, octaves: 5, seed: 51, contrast: 1.5 }), 3000 / dist, 0.5);
   }
 
   /** Setting sun on the horizon (true angular size ~9.3 MIL) with a glow. */
@@ -820,412 +945,26 @@ export class ScopeEngine {
   }
 
   /**
-   * Generates razor-sharp SVG vector reticle matching selected style and FFP scale factor
+   * Draws the reticle as crisp SVG from js/reticle-designs.js (geometry in MIL,
+   * scaled by the current pixels-per-MIL: first focal plane behaviour).
    */
   renderReticleSVG() {
     if (!this.svgContainer || !this.canvasSize) return;
-
     const size = this.canvasSize;
-    const center = size / 2;
-    // Pixels per MIL at current zoom in FFP
-    const pxPerMIL = this.pxPerMILAt();
-    // Numerals sit 1-2 MIL apart; below this spacing they overlap into clutter
-    // (on a real FFP scope they also become unreadably small at low power).
-    this.reticleLabelsVisible = pxPerMIL >= 16;
-
-    const strokeColor = this.reticleColor || '#ff2a2a';
-    const brightness = this.reticleBrightness;
-
-    let svgContent = '';
-
-    switch (this.reticleType) {
-      case 'christmas_tree':
-        svgContent = this.generateChristmasTreeSVG(center, pxPerMIL, strokeColor);
-        break;
-
-      case 'tremor_style':
-        svgContent = this.generateTremorStyleSVG(center, pxPerMIL, strokeColor);
-        break;
-
-      case 'mrad_grid':
-        svgContent = this.generateMRADGridSVG(center, pxPerMIL, strokeColor);
-        break;
-
-      case 'duplex_bdc':
-        svgContent = this.generateDuplexBDCSVG(center, pxPerMIL, strokeColor);
-        break;
-
-      case 'german_number4':
-        svgContent = this.generateGerman4SVG(center, pxPerMIL, strokeColor);
-        break;
-
-      case 'circle_dot':
-        svgContent = this.generateCircleDotSVG(center, pxPerMIL, strokeColor);
-        break;
-
-      case 'crosshair_only':
-        svgContent = this.generateCrosshairSVG(center, pxPerMIL, strokeColor);
-        break;
-
-      case 'mil_dot':
-      default:
-        svgContent = this.generateMILDotSVG(center, pxPerMIL, strokeColor);
-        break;
-    }
-
+    const color = this.reticleColor || '#111111';
+    // Illuminated colours get a faint glow; a black etched reticle stays plain.
+    const illuminated = !/^#(0|1)[0-9a-f]{5}$/i.test(color);
     this.svgContainer.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" style="opacity: ${brightness};">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" style="opacity: ${this.reticleBrightness};">
         <defs>
-          <filter id="reticleContrastGlow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="0" stdDeviation="1.2" flood-color="#000000" flood-opacity="0.95"/>
-            <feDropShadow dx="0" dy="0" stdDeviation="0.5" flood-color="#000000" flood-opacity="1.0"/>
+          <filter id="reticleHalo" x="-5%" y="-5%" width="110%" height="110%">
+            <feGaussianBlur stdDeviation="1.1" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
           </filter>
         </defs>
-        <g filter="url(#reticleContrastGlow)">
-          ${svgContent}
-        </g>
+        ${reticleSVG(this.reticleType, { ppm: this.pxPerMILAt(), cx: size / 2, cy: size / 2, color, halo: illuminated })}
       </svg>
     `;
-  }
-
-  /** Helper to build dual-pass SVG elements with dark outline and bright inner stroke */
-  createHighContrastLine(x1, y1, x2, y2, color, width) {
-    const bgWidth = width + 2;
-    return `
-      <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#000000" stroke-width="${bgWidth}" stroke-linecap="round"/>
-      <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${width}" stroke-linecap="round"/>
-    `;
-  }
-
-  createHighContrastCircle(cx, cy, r, color) {
-    return `
-      <circle cx="${cx}" cy="${cy}" r="${r + 1.2}" fill="#000000"/>
-      <circle cx="${cx}" cy="${cy}" r="${r}" fill="${color}"/>
-    `;
-  }
-
-  createHighContrastText(x, y, text, color, fontSize = 11, anchor = "middle") {
-    if (this.reticleLabelsVisible === false) return '';
-    return `
-      <text x="${x}" y="${y}" fill="#000000" font-size="${fontSize}" font-weight="900" font-family="'Roboto Mono', monospace" text-anchor="${anchor}" stroke="#000000" stroke-width="2.5" paint-order="stroke fill">${text}</text>
-      <text x="${x}" y="${y}" fill="${color}" font-size="${fontSize}" font-weight="700" font-family="'Roboto Mono', monospace" text-anchor="${anchor}">${text}</text>
-    `;
-  }
-
-  generateMILDotSVG(center, pxPerMIL, color) {
-    let elements = [];
-    const maxMIL = 12;
-
-    // Heavy Outer Duplex Posts
-    const duplexStart = 10 * pxPerMIL;
-    const duplexLen = 300;
-    elements.push(this.createHighContrastLine(center - duplexStart - duplexLen, center, center - duplexStart, center, color, 5));
-    elements.push(this.createHighContrastLine(center + duplexStart, center, center + duplexStart + duplexLen, center, color, 5));
-    elements.push(this.createHighContrastLine(center, center - duplexStart - duplexLen, center, center - duplexStart, color, 5));
-    elements.push(this.createHighContrastLine(center, center + duplexStart, center, center + duplexStart + duplexLen, color, 5));
-
-    // Fine Crosshair lines
-    elements.push(this.createHighContrastLine(center - 10 * pxPerMIL, center, center + 10 * pxPerMIL, center, color, 1.8));
-    elements.push(this.createHighContrastLine(center, center - 10 * pxPerMIL, center, center + 10 * pxPerMIL, color, 1.8));
-
-    // Center Dot
-    elements.push(this.createHighContrastCircle(center, center, 2.0, color));
-
-    // 1 MIL Dots & 0.5 MIL Hashes along axes
-    for (let i = 1; i <= maxMIL; i++) {
-      const dist = i * pxPerMIL;
-      const dotRadius = 3.0;
-      const hashHalf = 4.5;
-
-      // 0.5 MIL hashes
-      const halfDist = (i - 0.5) * pxPerMIL;
-      elements.push(this.createHighContrastLine(center - halfDist, center - hashHalf, center - halfDist, center + hashHalf, color, 1.4));
-      elements.push(this.createHighContrastLine(center + halfDist, center - hashHalf, center + halfDist, center + hashHalf, color, 1.4));
-      elements.push(this.createHighContrastLine(center - hashHalf, center - halfDist, center + hashHalf, center - halfDist, color, 1.4));
-      elements.push(this.createHighContrastLine(center - hashHalf, center + halfDist, center + hashHalf, center + halfDist, color, 1.4));
-
-      // 1 MIL Dots
-      elements.push(this.createHighContrastCircle(center - dist, center, dotRadius, color));
-      elements.push(this.createHighContrastCircle(center + dist, center, dotRadius, color));
-      elements.push(this.createHighContrastCircle(center, center - dist, dotRadius, color));
-      elements.push(this.createHighContrastCircle(center, center + dist, dotRadius, color));
-
-      // Numeric labels every 2 MILs
-      if (i % 2 === 0 && i <= 10) {
-        elements.push(this.createHighContrastText(center - dist, center - 12, `${i}`, color, 11));
-        elements.push(this.createHighContrastText(center + dist, center - 12, `${i}`, color, 11));
-        elements.push(this.createHighContrastText(center + 14, center + dist + 4, `${i}`, color, 11, "start"));
-        elements.push(this.createHighContrastText(center + 14, center - dist + 4, `${i}`, color, 11, "start"));
-      }
-    }
-
-    return elements.join('');
-  }
-
-  generateChristmasTreeSVG(center, pxPerMIL, color) {
-    let elements = [];
-    const maxMIL = 10;
-
-    // Main Axes
-    elements.push(this.createHighContrastLine(center - 12 * pxPerMIL, center, center + 12 * pxPerMIL, center, color, 2.0));
-    elements.push(this.createHighContrastLine(center, center - 10 * pxPerMIL, center, center + 12 * pxPerMIL, color, 2.0));
-
-    // Center floating dot
-    elements.push(this.createHighContrastCircle(center, center, 2.2, color));
-
-    // Horizontal & Vertical Hash marks
-    for (let i = 1; i <= maxMIL; i++) {
-      const dist = i * pxPerMIL;
-      const isFive = i % 5 === 0;
-      const tickH = isFive ? 10 : 5;
-
-      // 0.5 MIL Hashes
-      const halfD = (i - 0.5) * pxPerMIL;
-      elements.push(this.createHighContrastLine(center - halfD, center - 3, center - halfD, center + 3, color, 1.2));
-      elements.push(this.createHighContrastLine(center + halfD, center - 3, center + halfD, center + 3, color, 1.2));
-
-      // Full MIL Hashes
-      elements.push(this.createHighContrastLine(center - dist, center - tickH, center - dist, center + tickH, color, 1.6));
-      elements.push(this.createHighContrastLine(center + dist, center - tickH, center + dist, center + tickH, color, 1.6));
-      elements.push(this.createHighContrastLine(center - tickH, center - dist, center + tickH, center - dist, color, 1.6));
-
-      // Numeric MIL labels on horizontal axis
-      elements.push(this.createHighContrastText(center - dist, center - 14, `${i}`, color, 11));
-      elements.push(this.createHighContrastText(center + dist, center - 14, `${i}`, color, 11));
-
-      // Christmas Tree Windage Hold dots & crosses below center
-      const dropY = center + dist;
-      const windageMILs = i * 1.0; // expanding tree width
-      for (let w = 1; w <= windageMILs; w++) {
-        const windX = w * pxPerMIL;
-        if (w % 2 === 0) {
-          elements.push(this.createHighContrastLine(center - windX - 3, dropY, center - windX + 3, dropY, color, 1.4));
-          elements.push(this.createHighContrastLine(center - windX, dropY - 3, center - windX, dropY + 3, color, 1.4));
-          elements.push(this.createHighContrastLine(center + windX - 3, dropY, center + windX + 3, dropY, color, 1.4));
-          elements.push(this.createHighContrastLine(center + windX, dropY - 3, center + windX, dropY + 3, color, 1.4));
-        } else {
-          elements.push(this.createHighContrastCircle(center - windX, dropY, 2.2, color));
-          elements.push(this.createHighContrastCircle(center + windX, dropY, 2.2, color));
-        }
-      }
-
-      // Vertical Drop MIL numbers
-      if (i % 2 === 0) {
-        elements.push(this.createHighContrastText(center - 16, dropY + 4, `${i}`, color, 11, "end"));
-      }
-    }
-
-    return elements.join('');
-  }
-
-  generateTremorStyleSVG(center, pxPerMIL, color) {
-    let elements = [];
-    // Main crosshair axes
-    elements.push(this.createHighContrastLine(center - 12 * pxPerMIL, center, center + 12 * pxPerMIL, center, color, 1.8));
-    elements.push(this.createHighContrastLine(center, center - 10 * pxPerMIL, center, center + 12 * pxPerMIL, color, 1.8));
-    elements.push(this.createHighContrastCircle(center, center, 2.2, color));
-
-    // Fine 0.2 MIL tick marks near center (within 3 MILs)
-    // Integer loop: accumulating 0.2 in floating point stopped at 2.8 and dropped
-    // the 3.0 MIL tick and label (audit BUG-008).
-    for (let k = 1; k <= 15; k++) {
-      const sub = k / 5;
-      const d = sub * pxPerMIL;
-      const isWhole = k % 5 === 0;
-      const isHalf = k % 5 !== 0 && (k * 2) % 5 === 0;
-      const h = isWhole ? 8 : (isHalf ? 5.5 : 3.0);
-      const w = isWhole ? 1.6 : (isHalf ? 1.4 : 1.0);
-
-      elements.push(this.createHighContrastLine(center - d, center - h, center - d, center + h, color, w));
-      elements.push(this.createHighContrastLine(center + d, center - h, center + d, center + h, color, w));
-      elements.push(this.createHighContrastLine(center - h, center - d, center + h, center - d, color, w));
-
-      if (isWhole) {
-        const val = Math.round(sub);
-        elements.push(this.createHighContrastText(center - d, center - 12, `${val}`, color, 10));
-        elements.push(this.createHighContrastText(center + d, center - 12, `${val}`, color, 10));
-      }
-    }
-
-    // Moving Target Milling Brackets & Rapid Wind Hold Dots
-    for (let drop = 1; drop <= 8; drop++) {
-      const y = center + drop * pxPerMIL;
-
-      // Drop Line Hashes
-      elements.push(this.createHighContrastLine(center - 4, y, center + 4, y, color, 1.6));
-      elements.push(this.createHighContrastText(center - 14, y + 4, `${drop}`, color, 10, "end"));
-
-      // Chevron & Speed Dots for 4mph, 8mph, 12mph wind holds
-      for (let wind = 1; wind <= drop * 1.2; wind++) {
-        const x = wind * pxPerMIL;
-        elements.push(this.createHighContrastCircle(center - x, y, 2.2, color));
-        elements.push(this.createHighContrastCircle(center + x, y, 2.2, color));
-      }
-    }
-
-    return elements.join('');
-  }
-
-  generateMRADGridSVG(center, pxPerMIL, color) {
-    let elements = [];
-    // Clean MRAD Grid
-    elements.push(this.createHighContrastLine(center - 14 * pxPerMIL, center, center + 14 * pxPerMIL, center, color, 2.0));
-    elements.push(this.createHighContrastLine(center, center - 14 * pxPerMIL, center, center + 14 * pxPerMIL, color, 2.0));
-    elements.push(this.createHighContrastCircle(center, center, 2.5, color));
-
-    for (let i = 1; i <= 12; i++) {
-      const d = i * pxPerMIL;
-      const isEven = i % 2 === 0;
-      const tickH = isEven ? 8 : 4.5;
-
-      // 0.5 MRAD intermediate tick marks
-      const halfD = (i - 0.5) * pxPerMIL;
-      elements.push(this.createHighContrastLine(center - halfD, center - 2.5, center - halfD, center + 2.5, color, 1.2));
-      elements.push(this.createHighContrastLine(center + halfD, center - 2.5, center + halfD, center + 2.5, color, 1.2));
-      elements.push(this.createHighContrastLine(center - 2.5, center - halfD, center + 2.5, center - halfD, color, 1.2));
-      elements.push(this.createHighContrastLine(center - 2.5, center + halfD, center + 2.5, center + halfD, color, 1.2));
-
-      // 1 MRAD ticks
-      elements.push(this.createHighContrastLine(center - d, center - tickH, center - d, center + tickH, color, 1.6));
-      elements.push(this.createHighContrastLine(center + d, center - tickH, center + d, center + tickH, color, 1.6));
-      elements.push(this.createHighContrastLine(center - tickH, center - d, center + tickH, center - d, color, 1.6));
-      elements.push(this.createHighContrastLine(center - tickH, center + d, center + tickH, center + d, color, 1.6));
-
-      if (isEven) {
-        elements.push(this.createHighContrastText(center - d, center + 18, `${i}`, color, 11));
-        elements.push(this.createHighContrastText(center + d, center + 18, `${i}`, color, 11));
-        elements.push(this.createHighContrastText(center + 16, center - d + 4, `${i}`, color, 11, "start"));
-        elements.push(this.createHighContrastText(center + 16, center + d + 4, `${i}`, color, 11, "start"));
-      }
-    }
-    return elements.join('');
-  }
-
-  generateDuplexBDCSVG(center, pxPerMIL, color) {
-    let elements = [];
-
-    // Heavy Duplex outer bars
-    const innerGap = 4 * pxPerMIL;
-    const outerLen = 350;
-    elements.push(this.createHighContrastLine(center - innerGap - outerLen, center, center - innerGap, center, color, 7));
-    elements.push(this.createHighContrastLine(center + innerGap, center, center + innerGap + outerLen, center, color, 7));
-    elements.push(this.createHighContrastLine(center, center - innerGap - outerLen, center, center - innerGap, color, 7));
-    elements.push(this.createHighContrastLine(center, center + 10 * pxPerMIL, center, center + 10 * pxPerMIL + outerLen, color, 7));
-
-    // Fine center crosshair
-    elements.push(this.createHighContrastLine(center - innerGap, center, center + innerGap, center, color, 1.6));
-    elements.push(this.createHighContrastLine(center, center - innerGap, center, center + 10 * pxPerMIL, color, 1.6));
-    elements.push(this.createHighContrastCircle(center, center, 2.0, color));
-
-    // BDC Holdover Bars below center (100m - 600m markers)
-    const bdcDrops = [
-      { mil: 0.3, label: "100m", width: 3 },
-      { mil: 1.5, label: "200m", width: 4 },
-      { mil: 3.2, label: "300m", width: 6 },
-      { mil: 5.2, label: "400m", width: 8 },
-      { mil: 7.5, label: "500m", width: 10 },
-      { mil: 10.0, label: "600m", width: 12 }
-    ];
-
-    bdcDrops.forEach(b => {
-      const y = center + b.mil * pxPerMIL;
-      const halfW = (b.width * pxPerMIL) / 2;
-      elements.push(this.createHighContrastLine(center - halfW, y, center + halfW, y, color, 2.2));
-      elements.push(this.createHighContrastText(center + halfW + 12, y + 4, b.label, color, 10, "start"));
-    });
-
-    return elements.join('');
-  }
-
-  generateGerman4SVG(center, pxPerMIL, color) {
-    let elements = [];
-    // 2.5 MIL (not the wider 3.5 originally used here): the heavy posts are this
-    // reticle's whole visual identity, and since the viewport only shows ~19.2/zoom
-    // MILs from center, a wider gap pushed them out of view for all but the lowest
-    // zoom presets. 2.5 MIL keeps them visible across a wider practical zoom range.
-    const innerGap = 2.5 * pxPerMIL;
-    const outerLen = 400;
-
-    // German #4 Extra Heavy Posts (Left, Right, Bottom)
-    elements.push(this.createHighContrastLine(center - innerGap - outerLen, center, center - innerGap, center, color, 10));
-    elements.push(this.createHighContrastLine(center + innerGap, center, center + innerGap + outerLen, center, color, 10));
-    elements.push(this.createHighContrastLine(center, center + innerGap, center, center + innerGap + outerLen, color, 10));
-
-    // Thin top vertical post & fine center crosshair
-    elements.push(this.createHighContrastLine(center, center - outerLen, center, center - innerGap, color, 1.8));
-    elements.push(this.createHighContrastLine(center - innerGap, center, center + innerGap, center, color, 1.8));
-    elements.push(this.createHighContrastLine(center, center - innerGap, center, center + innerGap, color, 1.8));
-
-    // Center precision dot
-    elements.push(this.createHighContrastCircle(center, center, 2.2, color));
-
-    // 1 MIL tick marks inside central aperture
-    for (let i = 1; i <= 3; i++) {
-      const d = i * pxPerMIL;
-      elements.push(this.createHighContrastLine(center - d, center - 3, center - d, center + 3, color, 1.4));
-      elements.push(this.createHighContrastLine(center + d, center - 3, center + d, center + 3, color, 1.4));
-      elements.push(this.createHighContrastLine(center - 3, center - d, center + 3, center - d, color, 1.4));
-    }
-
-    return elements.join('');
-  }
-
-  generateCircleDotSVG(center, pxPerMIL, color) {
-    let elements = [];
-
-    // Outer 65 MOA / ~18 MIL speed horseshoe (Radius ~ 9 MILs), drawn as a true open
-    // arc (not a full circle masked by an opaque line) so the gap actually reveals
-    // the environment behind it instead of painting a black bar over it.
-    const radius = 9 * pxPerMIL;
-    const gapAngle = 40 * (Math.PI / 180);
-    const arcStart = -Math.PI / 2 + gapAngle / 2; // just past the gap, sweeping clockwise
-    const arcEnd = -Math.PI / 2 - gapAngle / 2 + 2 * Math.PI; // back around to just before the gap
-    const sx = center + radius * Math.cos(arcStart);
-    const sy = center + radius * Math.sin(arcStart);
-    const ex = center + radius * Math.cos(arcEnd);
-    const ey = center + radius * Math.sin(arcEnd);
-    const horseshoePath = `M ${sx} ${sy} A ${radius} ${radius} 0 1 1 ${ex} ${ey}`;
-    elements.push(`
-      <path d="${horseshoePath}" fill="none" stroke="#000000" stroke-width="4.5" stroke-linecap="round"/>
-      <path d="${horseshoePath}" fill="none" stroke="${color}" stroke-width="2.8" stroke-linecap="round"/>
-    `);
-
-    // Center illuminated 0.2 MIL dot
-    elements.push(this.createHighContrastCircle(center, center, 2.5, color));
-
-    // 1 MIL Stadia line ticks below horseshoe
-    for (let i = 1; i <= 10; i++) {
-      const d = i * pxPerMIL;
-      const tickW = (i % 2 === 0) ? 6 : 3.5;
-      elements.push(this.createHighContrastLine(center - d, center - 3, center - d, center + 3, color, 1.4));
-      elements.push(this.createHighContrastLine(center + d, center - 3, center + d, center + 3, color, 1.4));
-      elements.push(this.createHighContrastLine(center - tickW, center + d, center + tickW, center + d, color, 1.4));
-
-      if (i % 2 === 0) {
-        elements.push(this.createHighContrastText(center + tickW + 10, center + d + 4, `${i}`, color, 10, "start"));
-      }
-    }
-
-    return elements.join('');
-  }
-
-  generateCrosshairSVG(center, pxPerMIL, color) {
-    let elements = [];
-    elements.push(this.createHighContrastLine(center - 16 * pxPerMIL, center, center + 16 * pxPerMIL, center, color, 1.4));
-    elements.push(this.createHighContrastLine(center, center - 16 * pxPerMIL, center, center + 16 * pxPerMIL, color, 1.4));
-    elements.push(this.createHighContrastCircle(center, center, 1.8, color));
-
-    // 1 MIL fine tick marks
-    for (let i = 1; i <= 15; i++) {
-      const d = i * pxPerMIL;
-      const h = (i % 5 === 0) ? 6 : 3;
-      elements.push(this.createHighContrastLine(center - d, center - h, center - d, center + h, color, 1.2));
-      elements.push(this.createHighContrastLine(center + d, center - h, center + d, center + h, color, 1.2));
-      elements.push(this.createHighContrastLine(center - h, center - d, center + h, center - d, color, 1.2));
-      elements.push(this.createHighContrastLine(center - h, center + d, center + h, center + d, color, 1.2));
-    }
-
-    return elements.join('');
   }
 
   /**

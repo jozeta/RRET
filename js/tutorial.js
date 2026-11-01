@@ -1,3 +1,6 @@
+import { reticleDiagram } from './reticle-help.js';
+import { escapeHTML } from './utils.js';
+
 /* ==========================================================================
    Learn page: diagrams, calculator, quiz and reticle previews
    ========================================================================== */
@@ -122,43 +125,26 @@ export class TutorialController {
     }
   }
 
-  /**
-   * Small illustrative preview SVGs keyed by reticle id. Names, descriptions,
-   * and feature tags come from data/reticles.json (via app.reticles) so there's
-   * a single source of truth shared with the simulator/settings dropdowns —
-   * only the presentational mini-diagram lives here.
-   */
-  static RETICLE_PREVIEW_SVG = {
-    mil_dot: `<line x1="10" y1="70" x2="190" y2="70" stroke="#ff2a2a" stroke-width="2"/><line x1="100" y1="10" x2="100" y2="130" stroke="#ff2a2a" stroke-width="2"/><circle cx="70" cy="70" r="3" fill="#ff2a2a"/><circle cx="130" cy="70" r="3" fill="#ff2a2a"/><circle cx="100" cy="40" r="3" fill="#ff2a2a"/><circle cx="100" cy="100" r="3" fill="#ff2a2a"/>`,
-    christmas_tree: `<line x1="10" y1="40" x2="190" y2="40" stroke="#ff2a2a" stroke-width="2"/><line x1="100" y1="10" x2="100" y2="130" stroke="#ff2a2a" stroke-width="2"/><circle cx="80" cy="65" r="2.5" fill="#ff2a2a"/><circle cx="120" cy="65" r="2.5" fill="#ff2a2a"/><circle cx="65" cy="90" r="2.5" fill="#ff2a2a"/><circle cx="135" cy="90" r="2.5" fill="#ff2a2a"/><circle cx="50" cy="115" r="2.5" fill="#ff2a2a"/><circle cx="150" cy="115" r="2.5" fill="#ff2a2a"/>`,
-    tremor_style: `<line x1="10" y1="50" x2="190" y2="50" stroke="#ff2a2a" stroke-width="1.8"/><line x1="100" y1="10" x2="100" y2="130" stroke="#ff2a2a" stroke-width="1.8"/><line x1="85" y1="45" x2="85" y2="55" stroke="#ff2a2a" stroke-width="1.5"/><line x1="115" y1="45" x2="115" y2="55" stroke="#ff2a2a" stroke-width="1.5"/><circle cx="75" cy="75" r="2" fill="#ff2a2a"/><circle cx="125" cy="75" r="2" fill="#ff2a2a"/>`,
-    mrad_grid: `<line x1="10" y1="70" x2="190" y2="70" stroke="#ff2a2a" stroke-width="2"/><line x1="100" y1="10" x2="100" y2="130" stroke="#ff2a2a" stroke-width="2"/><line x1="60" y1="62" x2="60" y2="78" stroke="#ff2a2a" stroke-width="1.5"/><line x1="140" y1="62" x2="140" y2="78" stroke="#ff2a2a" stroke-width="1.5"/><text x="60" y="94" fill="#ff2a2a" font-size="10" font-family="'Roboto Mono'" text-anchor="middle">2</text><text x="140" y="94" fill="#ff2a2a" font-size="10" font-family="'Roboto Mono'" text-anchor="middle">2</text>`,
-    duplex_bdc: `<line x1="10" y1="40" x2="70" y2="40" stroke="#ff2a2a" stroke-width="6"/><line x1="130" y1="40" x2="190" y2="40" stroke="#ff2a2a" stroke-width="6"/><line x1="70" y1="40" x2="130" y2="40" stroke="#ff2a2a" stroke-width="1.5"/><line x1="100" y1="10" x2="100" y2="40" stroke="#ff2a2a" stroke-width="6"/><line x1="100" y1="40" x2="100" y2="130" stroke="#ff2a2a" stroke-width="1.5"/><line x1="90" y1="65" x2="110" y2="65" stroke="#ff2a2a" stroke-width="2"/><line x1="85" y1="90" x2="115" y2="90" stroke="#ff2a2a" stroke-width="2"/><line x1="80" y1="115" x2="120" y2="115" stroke="#ff2a2a" stroke-width="2"/>`,
-    german_number4: `<line x1="10" y1="70" x2="75" y2="70" stroke="#ff2a2a" stroke-width="8"/><line x1="125" y1="70" x2="190" y2="70" stroke="#ff2a2a" stroke-width="8"/><line x1="100" y1="95" x2="100" y2="135" stroke="#ff2a2a" stroke-width="8"/><line x1="75" y1="70" x2="125" y2="70" stroke="#ff2a2a" stroke-width="1.5"/><line x1="100" y1="10" x2="100" y2="95" stroke="#ff2a2a" stroke-width="1.5"/>`,
-    circle_dot: `<circle cx="100" cy="70" r="45" fill="none" stroke="#ff2a2a" stroke-width="3"/><circle cx="100" cy="70" r="3" fill="#ff2a2a"/><line x1="100" y1="70" x2="100" y2="130" stroke="#ff2a2a" stroke-width="1.8"/>`,
-    crosshair_only: `<line x1="10" y1="70" x2="190" y2="70" stroke="#ff2a2a" stroke-width="1.2"/><line x1="100" y1="10" x2="100" y2="130" stroke="#ff2a2a" stroke-width="1.2"/><circle cx="100" cy="70" r="1.5" fill="#ff2a2a"/>`
-  };
 
   renderReticleMatrix() {
     const container = document.getElementById('learn-reticles-comparison-grid');
     if (!container) return;
 
     const reticles = (this.app && this.app.reticles) || [];
-    const previews = TutorialController.RETICLE_PREVIEW_SVG;
-
+    // Previews are drawn by the same engine as the scope, so they can't drift.
     container.innerHTML = reticles.map(r => `
-      <div class="col-md-6 col-lg-3">
+      <div class="col-md-6 col-lg-4 col-xl-3">
         <div class="reticle-preview-card d-flex flex-column">
           <div class="reticle-preview-svg">
-            <svg viewBox="0 0 200 140" width="100%" height="100%">
-              ${previews[r.id] || ''}
-            </svg>
+            ${reticleDiagram(r.id, { width: 220, height: 150, withExample: false, view: { x: 0, y: 0, ppm: 9 } })}
           </div>
-          <h5 class="tactical-font text-tan-light mb-1">${r.name}</h5>
-          <p class="small text-muted mb-3 flex-grow-1">${r.description}</p>
-          <button class="btn btn-sm btn-tactical-outline w-100 btn-preview-select" data-reticle="${r.id}">
-            Select in Simulator
-          </button>
+          <h3 class="h6 mb-1 mt-2">${escapeHTML(r.name)}</h3>
+          <p class="small text-muted mb-1">${escapeHTML(r.scale)}</p>
+          <p class="small text-muted mb-3 flex-grow-1">${escapeHTML(r.description)}</p>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-tactical-outline flex-grow-1" data-reticle-help data-reticle="${escapeHTML(r.id)}">How it works</button>
+            <button type="button" class="btn btn-sm btn-tactical-secondary btn-preview-select" data-reticle="${escapeHTML(r.id)}">Use</button>
+          </div>
         </div>
       </div>
     `).join('');

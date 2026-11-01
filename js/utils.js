@@ -2,7 +2,7 @@
    Utility & Mathematical Helper Functions
    ========================================================================== */
 
-import { buildArt, ART_TYPES } from './target-art.js';
+import { buildArt, ART_TYPES, textureFilter } from './target-art.js';
 
 export const UNITS = {
   METRIC: 'metric',
@@ -713,6 +713,13 @@ export function renderTargetSVGString(target, widthPx = 120, heightPx = 120) {
       // zone lines and centre marks stay faint
       .split(`fill="none" stroke="${border}"`).join(`fill="none" stroke="${border}" stroke-opacity="0.45"`)
       .split(`fill="${border}"/>`).join(`fill="${border}" fill-opacity="0.45"/>`);
+  }
+
+  // Material grain for field figures (matte paint on board) and steel plates.
+  if (isFigure || type === 'circle_gong') {
+    const tid = `tex${++svgIdCounter}`;
+    const opts = type === 'circle_gong' ? { freq: '1.2 1.2', dark: 0.16, light: 0.1, seed: 4 } : { freq: '0.6 1.4', dark: 0.3, light: 0.1, seed: 2 };
+    innerContent = `<defs>${textureFilter(tid, opts)}</defs><g filter="url(#${tid})">${innerContent}</g>`;
   }
 
   // Shapes drawn with margins inside the 100x100 design box are mapped so their
