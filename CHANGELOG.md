@@ -22,6 +22,7 @@ Audit fixes and new training features (pull request #1).
 - Coach mode (reading error vs maths error), station mode (fältskytte) with printable range cards, progress analytics with CSV export, realistic optics calibration.
 - Works offline and can be installed as an app; all assets self-hosted with a Content-Security-Policy.
 - Mobile layout with the answer bar beside the scope; accessibility labels and focus styles.
+- "Show solution" button in free practice: reveals the distance, MIL readings and calculation without scoring the round.
 - Version number in the footer and About page.
 - Unit tests, browser smoke tests and GitHub Actions CI.
 

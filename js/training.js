@@ -214,6 +214,8 @@ export class TrainingManager {
     if (inputEl) inputEl.disabled = locked;
     if (milEl) milEl.disabled = locked;
     if (submitBtn) submitBtn.disabled = locked;
+    const solutionBtn = document.getElementById('btn-show-solution');
+    if (solutionBtn) solutionBtn.disabled = locked;
   }
 
   /** Re-render unit-dependent labels after a units change, keeping typed input (BUG-018). */
@@ -363,29 +365,60 @@ export class TrainingManager {
     };
   }
 
-  showResultBreakdown({ scenario: s, answer, evalResult: result, diagnostics }) {
+  /**
+   * Reveals the answer without scoring the round: the scenario is locked like an
+   * answered one, but nothing is written to history, so stats stay honest.
+   */
+  revealSolution() {
+    const s = this.currentScenario;
+    if (!s || s.answered || (this.station && this.station.active)) return;
+    this.pauseTimer();
+    s.answered = true;
+    s.revealed = true;
+    this.setFormLocked(true);
+    this.lastResult = { scenario: s, answer: null, evalResult: null, diagnostics: null, revealed: true };
+    this.showResultBreakdown(this.lastResult);
+  }
+
+  showResultBreakdown({ scenario: s, answer, evalResult: result, diagnostics, revealed = false }) {
     const resultCard = document.getElementById('sim-result-card');
     if (!resultCard) return;
     const unit = this.unit;
 
     const badge = document.getElementById('res-score-badge');
-    badge.className = `badge ${result.badgeClass} fs-6 p-2`;
-    badge.textContent = `${result.score} PTS (${result.rating})`;
+    const title = document.getElementById('res-title');
+    if (revealed) {
+      badge.className = 'badge bg-secondary fs-6 p-2';
+      badge.textContent = 'NOT SCORED';
+      if (title) title.textContent = 'Solution';
+    } else {
+      badge.className = `badge ${result.badgeClass} fs-6 p-2`;
+      badge.textContent = `${result.score} PTS (${result.rating})`;
+      if (title) title.textContent = 'Calculation Breakdown';
+    }
 
     document.getElementById('res-actual-dist').textContent = formatDistance(s.distance, unit, { long: true });
-    document.getElementById('res-estimated-dist').textContent = formatDistance(answer.estimateMeters, unit, { long: true });
-    const errAbs = Math.abs(answer.estimateMeters - s.distance);
-    const errStr = unit === 'imperial' ? `${Math.round(metersToYards(errAbs))} yd` : `${Math.round(errAbs)} m`;
-    document.getElementById('res-error-m').textContent = `${errStr} (${result.errorPct}%)`;
+    document.getElementById('res-estimated-dist').textContent = answer ? formatDistance(answer.estimateMeters, unit, { long: true }) : '–';
+    if (answer) {
+      const errAbs = Math.abs(answer.estimateMeters - s.distance);
+      const errStr = unit === 'imperial' ? `${Math.round(metersToYards(errAbs))} yd` : `${Math.round(errAbs)} m`;
+      document.getElementById('res-error-m').textContent = `${errStr} (${result.errorPct}%)`;
+    } else {
+      document.getElementById('res-error-m').textContent = '–';
+    }
 
     // Both dimensions, in the active unit, plus what the user's answer implies.
-    const impliedMilH = (s.target.height * 1000) / answer.estimateMeters;
-    const impliedMilW = (s.target.width * 1000) / answer.estimateMeters;
     const lines = [
       formulaLine(s.target.height, s.distance, unit, 'Height'),
-      formulaLine(s.target.width, s.distance, unit, 'Width'),
-      `Your answer implies ${impliedMilH.toFixed(2)} MIL tall / ${impliedMilW.toFixed(2)} MIL wide (true: ${s.milHeight.toFixed(2)} / ${s.milWidth.toFixed(2)} MIL).`
+      formulaLine(s.target.width, s.distance, unit, 'Width')
     ];
+    if (answer) {
+      const impliedMilH = (s.target.height * 1000) / answer.estimateMeters;
+      const impliedMilW = (s.target.width * 1000) / answer.estimateMeters;
+      lines.push(`Your answer implies ${impliedMilH.toFixed(2)} MIL tall / ${impliedMilW.toFixed(2)} MIL wide (true: ${s.milHeight.toFixed(2)} / ${s.milWidth.toFixed(2)} MIL).`);
+    } else {
+      lines.push(`In the scope the target measures ${s.milHeight.toFixed(2)} MIL tall and ${s.milWidth.toFixed(2)} MIL wide (see the orange brackets).`);
+    }
     const math = document.getElementById('res-math-breakdown');
     math.innerHTML = lines.map(l => `<div>${escapeHTML(l)}</div>`).join('');
 
@@ -427,6 +460,9 @@ export class TrainingManager {
 
     const nextBtn = document.getElementById('btn-next-scenario');
     if (nextBtn) nextBtn.addEventListener('click', () => this.startNewScenario());
+
+    const solutionBtn = document.getElementById('btn-show-solution');
+    if (solutionBtn) solutionBtn.addEventListener('click', () => this.revealSolution());
 
     const coachToggle = document.getElementById('sim-coach-toggle');
     if (coachToggle) {

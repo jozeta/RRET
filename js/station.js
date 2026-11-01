@@ -84,6 +84,9 @@ export class StationController {
   setFreePracticeControlsVisible(visible) {
     const next = document.getElementById('btn-next-scenario');
     if (next) next.hidden = !visible;
+    // Revealing answers would defeat a station.
+    const solution = document.getElementById('btn-show-solution');
+    if (solution) solution.hidden = !visible;
     const title = document.getElementById('sim-card-title');
     if (title && visible) title.textContent = 'Current Target Scenario';
   }

@@ -248,6 +248,24 @@ await check('result card uses the active unit (BUG-010)', async () => {
   assert(/yd/.test(txt) && !/ m \(/.test(txt), txt);
 });
 
+await check('Show solution reveals the answer without scoring the round', async () => {
+  await load();
+  const before = await rounds();
+  await click('#btn-show-solution');
+  const r = await evaluate(`({
+    visible: document.getElementById('sim-result-card').style.display !== 'none',
+    title: document.getElementById('res-title').textContent,
+    actual: document.getElementById('res-actual-dist').textContent,
+    expected: Math.round(app.training.currentScenario.distance),
+    locked: document.getElementById('btn-submit-estimate').disabled,
+    brackets: app.scope.truthOverlay
+  })`);
+  assert(r.visible && r.title === 'Solution' && r.actual.startsWith(String(r.expected)) && r.locked && r.brackets, JSON.stringify(r));
+  assert(await rounds() === before, 'a revealed round was recorded');
+  await click('#btn-next-scenario');
+  assert(!(await evaluate(`document.getElementById('btn-show-solution').disabled`)), 'button still disabled on the next scenario');
+});
+
 await check('coach mode shows reading vs maths error (FEAT-003)', async () => {
   await load();
   await click('#sim-coach-toggle');
