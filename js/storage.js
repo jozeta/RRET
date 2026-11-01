@@ -17,9 +17,7 @@ const DEFAULT_SETTINGS = {
   reticleBrightness: 1.0,
   zoomSensitivity: 1.0,
   panSensitivity: 1.0,
-  soundEnabled: true,
-  rangeMin: 50,
-  rangeMax: 1000
+  soundEnabled: true
 };
 
 const DEFAULT_STATS = {
