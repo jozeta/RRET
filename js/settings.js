@@ -4,6 +4,21 @@
 
 import { StorageManager } from './storage.js';
 import { sfx } from './utils.js';
+import { toast } from './ui.js';
+
+const CARD_WIDTH_MM = 85.6; // ISO/IEC 7810 ID-1 (bank card)
+const DEFAULT_CALIB_PX = Math.round((96 / 25.4) * CARD_WIDTH_MM);
+
+/**
+ * Every theme sets every variable, so switching themes never leaves a value from
+ * the previous one behind (audit BUG-019).
+ */
+const THEMES = {
+  'dark-tactical': { '--bg-dark-base': '#0b0d0f', '--bg-dark-surface': '#14181c', '--bg-dark-card': '#1b2126', '--olive-primary': '#526348', '--tan-accent': '#c9a572', '--orange-highlight': '#ff8c00' },
+  'military-olive': { '--bg-dark-base': '#0d120e', '--bg-dark-surface': '#17211a', '--bg-dark-card': '#1f2d23', '--olive-primary': '#5e7b51', '--tan-accent': '#d4b277', '--orange-highlight': '#ff8c00' },
+  'desert-tan': { '--bg-dark-base': '#14110e', '--bg-dark-surface': '#211b16', '--bg-dark-card': '#2e261f', '--olive-primary': '#7a674d', '--tan-accent': '#e3ba83', '--orange-highlight': '#ff8c00' },
+  'high-contrast': { '--bg-dark-base': '#000000', '--bg-dark-surface': '#111111', '--bg-dark-card': '#1a1a1a', '--olive-primary': '#00ff66', '--tan-accent': '#ffff00', '--orange-highlight': '#ff6600' }
+};
 
 export class SettingsController {
   constructor(app) {
@@ -22,70 +37,101 @@ export class SettingsController {
     const s = this.settings;
     const form = document.getElementById('settings-form');
     if (!form) return;
+    const el = (name) => form.elements[name];
 
-    if (form.elements['reticle-select']) form.elements['reticle-select'].value = s.reticle;
-    if (form.elements['unit-select']) form.elements['unit-select'].value = s.unit;
-    if (form.elements['theme-select']) form.elements['theme-select'].value = s.theme;
-    if (form.elements['reticle-color']) form.elements['reticle-color'].value = s.reticleColor;
-    if (form.elements['reticle-brightness']) form.elements['reticle-brightness'].value = s.reticleBrightness;
-    if (form.elements['zoom-sensitivity']) form.elements['zoom-sensitivity'].value = s.zoomSensitivity;
-    if (form.elements['pan-sensitivity']) form.elements['pan-sensitivity'].value = s.panSensitivity;
-    if (form.elements['sound-toggle']) form.elements['sound-toggle'].checked = s.soundEnabled;
+    if (el('reticle-select')) el('reticle-select').value = s.reticle;
+    if (el('unit-select')) el('unit-select').value = s.unit;
+    if (el('theme-select')) el('theme-select').value = s.theme;
+    if (el('reticle-color')) el('reticle-color').value = s.reticleColor;
+    if (el('reticle-brightness')) el('reticle-brightness').value = s.reticleBrightness;
+    if (el('zoom-sensitivity')) el('zoom-sensitivity').value = s.zoomSensitivity;
+    if (el('pan-sensitivity')) el('pan-sensitivity').value = s.panSensitivity;
+    if (el('sound-toggle')) el('sound-toggle').checked = s.soundEnabled;
+    if (el('optics-mode')) el('optics-mode').value = s.opticsMode || 'arcade';
+    if (el('scope-profile')) el('scope-profile').value = s.scopeProfile || 'precision';
+    if (el('calib-px')) el('calib-px').value = s.screenPxPerMm ? Math.round(s.screenPxPerMm * CARD_WIDTH_MM) : DEFAULT_CALIB_PX;
+    if (el('viewing-distance')) el('viewing-distance').value = s.viewingDistanceCm || 60;
 
     const brightnessVal = document.getElementById('brightness-val');
     if (brightnessVal) brightnessVal.textContent = Math.round(s.reticleBrightness * 100) + '%';
+    this.updateCalibrationUI();
+  }
+
+  updateCalibrationUI() {
+    const form = document.getElementById('settings-form');
+    if (!form) return;
+    const calib = form.elements['calib-px'];
+    const bar = document.getElementById('calibration-bar');
+    if (calib && bar) bar.style.width = `${calib.value}px`;
+    const realistic = form.elements['optics-mode'] && form.elements['optics-mode'].value === 'realistic';
+    const box = document.getElementById('optics-calibration');
+    if (box) box.hidden = !realistic;
+    const profile = form.elements['scope-profile'];
+    if (profile) profile.disabled = !realistic;
+    const readout = document.getElementById('calibration-readout');
+    if (readout && calib) {
+      const pxPerMm = Number(calib.value) / CARD_WIDTH_MM;
+      readout.textContent = `${pxPerMm.toFixed(2)} px/mm`;
+    }
   }
 
   bindFormEvents() {
     const form = document.getElementById('settings-form');
     if (!form) return;
 
-    form.addEventListener('input', (e) => {
-      this.handleSettingChange(e);
-    });
-
-    form.addEventListener('change', (e) => {
-      this.handleSettingChange(e);
-    });
+    form.addEventListener('input', (e) => this.handleSettingChange(e));
+    form.addEventListener('change', (e) => this.handleSettingChange(e));
 
     const resetStatsBtn = document.getElementById('btn-reset-stats');
     if (resetStatsBtn) {
       resetStatsBtn.addEventListener('click', () => {
-        if (confirm('Are you sure you want to reset all training statistics and round history? This cannot be undone.')) {
+        if (confirm('Reset all training statistics and round history? This cannot be undone.')) {
           StorageManager.clearHistoryAndStats();
-          if (this.app && this.app.updateStatsUI) {
-            this.app.updateStatsUI();
-          }
-          alert('Statistics successfully reset.');
+          if (this.app && this.app.updateStatsUI) this.app.updateStatsUI();
+          toast('Statistics reset.', 'success');
         }
       });
     }
   }
 
-  handleSettingChange(e) {
+  handleSettingChange() {
     const form = document.getElementById('settings-form');
     if (!form) return;
+    const el = (name) => form.elements[name];
+    const num = (name, fallback) => {
+      const v = el(name) ? parseFloat(el(name).value) : NaN;
+      return Number.isFinite(v) ? v : fallback;
+    };
+    const prevUnit = this.settings.unit;
 
     const updated = {
-      reticle: form.elements['reticle-select'] ? form.elements['reticle-select'].value : this.settings.reticle,
-      unit: form.elements['unit-select'] ? form.elements['unit-select'].value : this.settings.unit,
-      theme: form.elements['theme-select'] ? form.elements['theme-select'].value : this.settings.theme,
-      reticleColor: form.elements['reticle-color'] ? form.elements['reticle-color'].value : this.settings.reticleColor,
-      reticleBrightness: form.elements['reticle-brightness'] ? parseFloat(form.elements['reticle-brightness'].value) : this.settings.reticleBrightness,
-      zoomSensitivity: form.elements['zoom-sensitivity'] ? parseFloat(form.elements['zoom-sensitivity'].value) : this.settings.zoomSensitivity,
-      panSensitivity: form.elements['pan-sensitivity'] ? parseFloat(form.elements['pan-sensitivity'].value) : this.settings.panSensitivity,
-      soundEnabled: form.elements['sound-toggle'] ? form.elements['sound-toggle'].checked : this.settings.soundEnabled
+      reticle: el('reticle-select') ? el('reticle-select').value : this.settings.reticle,
+      unit: el('unit-select') ? el('unit-select').value : this.settings.unit,
+      theme: el('theme-select') ? el('theme-select').value : this.settings.theme,
+      reticleColor: el('reticle-color') ? el('reticle-color').value : this.settings.reticleColor,
+      reticleBrightness: num('reticle-brightness', this.settings.reticleBrightness),
+      zoomSensitivity: num('zoom-sensitivity', this.settings.zoomSensitivity),
+      panSensitivity: num('pan-sensitivity', this.settings.panSensitivity),
+      soundEnabled: el('sound-toggle') ? el('sound-toggle').checked : this.settings.soundEnabled,
+      opticsMode: el('optics-mode') ? el('optics-mode').value : this.settings.opticsMode,
+      scopeProfile: el('scope-profile') ? el('scope-profile').value : this.settings.scopeProfile,
+      screenPxPerMm: num('calib-px', DEFAULT_CALIB_PX) / CARD_WIDTH_MM,
+      viewingDistanceCm: Math.min(200, Math.max(20, num('viewing-distance', this.settings.viewingDistanceCm || 60)))
     };
 
     const brightnessVal = document.getElementById('brightness-val');
     if (brightnessVal) brightnessVal.textContent = Math.round(updated.reticleBrightness * 100) + '%';
+    this.updateCalibrationUI();
 
     this.settings = StorageManager.saveSettings(updated);
     this.applyTheme(updated.theme);
     this.applySoundSetting();
 
-    if (this.app && this.app.scope) {
-      this.app.scope.updateSettings(updated);
+    if (this.app && this.app.scope) this.app.scope.updateSettings(updated);
+    // Units changed: refresh everything that displays distances (audit BUG-018).
+    if (updated.unit !== prevUnit && this.app) {
+      if (this.app.training) this.app.training.refreshUnits();
+      if (this.app.updateStatsUI) this.app.updateStatsUI();
     }
   }
 
@@ -94,37 +140,10 @@ export class SettingsController {
   }
 
   applyTheme(themeName) {
-    document.body.classList.remove('theme-dark-tactical', 'theme-military-olive', 'theme-desert-tan', 'theme-high-contrast');
-    document.body.classList.add(`theme-${themeName}`);
-
+    const name = THEMES[themeName] ? themeName : 'dark-tactical';
+    document.body.classList.remove(...Object.keys(THEMES).map(t => `theme-${t}`));
+    document.body.classList.add(`theme-${name}`);
     const root = document.documentElement;
-    if (themeName === 'military-olive') {
-      root.style.setProperty('--bg-dark-base', '#0d120e');
-      root.style.setProperty('--bg-dark-surface', '#17211a');
-      root.style.setProperty('--bg-dark-card', '#1f2d23');
-      root.style.setProperty('--olive-primary', '#5e7b51');
-      root.style.setProperty('--tan-accent', '#d4b277');
-    } else if (themeName === 'desert-tan') {
-      root.style.setProperty('--bg-dark-base', '#14110e');
-      root.style.setProperty('--bg-dark-surface', '#211b16');
-      root.style.setProperty('--bg-dark-card', '#2e261f');
-      root.style.setProperty('--olive-primary', '#7a674d');
-      root.style.setProperty('--tan-accent', '#e3ba83');
-    } else if (themeName === 'high-contrast') {
-      root.style.setProperty('--bg-dark-base', '#000000');
-      root.style.setProperty('--bg-dark-surface', '#111111');
-      root.style.setProperty('--bg-dark-card', '#1a1a1a');
-      root.style.setProperty('--olive-primary', '#00ff66');
-      root.style.setProperty('--tan-accent', '#ffff00');
-      root.style.setProperty('--orange-highlight', '#ff6600');
-    } else {
-      // Default Dark Tactical
-      root.style.setProperty('--bg-dark-base', '#0b0d0f');
-      root.style.setProperty('--bg-dark-surface', '#14181c');
-      root.style.setProperty('--bg-dark-card', '#1b2126');
-      root.style.setProperty('--olive-primary', '#526348');
-      root.style.setProperty('--tan-accent', '#c9a572');
-      root.style.setProperty('--orange-highlight', '#ff8c00');
-    }
+    Object.entries(THEMES[name]).forEach(([prop, value]) => root.style.setProperty(prop, value));
   }
 }

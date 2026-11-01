@@ -261,6 +261,46 @@ function quadrupedLegs(base, rearX, frontX, bodyBottomY, groundY, w = 6) {
   `;
 }
 
+/** width / height of a target, or `fallback` when dimensions are missing/invalid. */
+function aspectOf(target, fallback) {
+  const w = Number(target && target.width);
+  const h = Number(target && target.height);
+  return w > 0 && h > 0 ? w / h : fallback;
+}
+
+/**
+ * Measured visible bounding boxes [x0, y0, x1, y1] (in 100x100 design units,
+ * stroke included) of procedural shapes whose artwork does not touch all four
+ * edges of the design box. The scope stretches the design box to the target's
+ * declared real-world width x height, so any margin here would make the visible
+ * target smaller than the size the player is told to measure (audit BUG-001).
+ * renderTargetSVGString() maps each box onto the full 0..100 square.
+ *
+ * Measured by rasterizing each shape at 1000x1000; re-measure if artwork changes
+ * (the browser smoke test asserts every shape fills its box).
+ */
+export const SHAPE_FIT = {
+  swe_t: [0, 4.2, 100, 100],
+  swe_tunna: [1, 0, 99, 100],
+  swe_tunna_h: [0, 1, 100, 99],
+  swe_b: [3, 1, 97, 99],
+  swe_b45: [3, 1, 97, 99],
+  swe_b65: [3, 1, 97, 99],
+  prs_popper: [20.4, 0, 79.6, 100],
+  coyote: [7.2, 16.7, 81.1, 88],
+  deer: [10.5, 0.2, 78.8, 88],
+  elk: [4.5, 0, 94.9, 90],
+  moose: [3.5, 0.9, 99.1, 92],
+  reindeer: [7.5, 1, 89.8, 86],
+  bear: [2.7, 20.7, 96.8, 76],
+  boar: [6.7, 17.1, 91.9, 84],
+  wolf: [4.5, 13.8, 87.1, 88],
+  fox: [7, 23.6, 76.1, 86],
+  hare: [16.5, 8.8, 76.7, 84],
+  pheasant: [0, 26.3, 81, 79],
+  turkey: [7.4, 9.7, 77.8, 85.2]
+};
+
 /**
  * Generate Procedural SVG graphic string for targets
  */
@@ -320,32 +360,38 @@ export function renderTargetSVGString(target, widthPx = 120, heightPx = 120) {
       break;
 
     case 'swe_s_v':
-    case 'swe_s20v':
-      // Swedish S-figur Vertical (Stolpe): a true stadium (flat parallel sides +
-      // semicircular caps, via rect rx=width/2), not a circle — S-series always
-      // shows nested scoring rings + center hash dots per the reference chart.
+    case 'swe_s20v': {
+      // Swedish S-figur Vertical (Stolpe): a true stadium spanning the FULL declared
+      // width and height (the scope stretches this 100x100 box to the target's real
+      // W x H, so the outline must touch all four edges or the player is shown a
+      // smaller target than the stated size). Cap radii are given separately in x/y
+      // (ry = rx * W/H) so the caps stay semicircular after that stretch.
+      const a = aspectOf(target, 0.4); // width / height
       innerContent = `
-        <rect x="25" y="1" width="50" height="98" rx="25" fill="${color}" stroke="${border}" stroke-width="2"/>
-        <rect x="34" y="14" width="32" height="72" rx="16" fill="none" stroke="${border}" stroke-width="1" stroke-dasharray="2 2"/>
-        <rect x="41" y="28" width="18" height="44" rx="9" fill="none" stroke="${border}" stroke-width="1" stroke-dasharray="2 2"/>
-        <circle cx="50" cy="20" r="1.5" fill="${border}"/>
-        <circle cx="50" cy="50" r="1.5" fill="${border}"/>
-        <circle cx="50" cy="80" r="1.5" fill="${border}"/>
+        <rect x="1" y="1" width="98" height="98" rx="49" ry="${49 * a}" fill="${color}" stroke="${border}" stroke-width="2"/>
+        <rect x="18" y="14" width="64" height="72" rx="32" ry="${32 * a}" fill="none" stroke="${border}" stroke-width="1" stroke-dasharray="2 2"/>
+        <rect x="32" y="28" width="36" height="44" rx="18" ry="${18 * a}" fill="none" stroke="${border}" stroke-width="1" stroke-dasharray="2 2"/>
+        <ellipse cx="50" cy="20" rx="3" ry="${3 * a}" fill="${border}"/>
+        <ellipse cx="50" cy="50" rx="3" ry="${3 * a}" fill="${border}"/>
+        <ellipse cx="50" cy="80" rx="3" ry="${3 * a}" fill="${border}"/>
       `;
       break;
+    }
 
-    case 'swe_s_h':
-      // Swedish S-figur Horizontal — the 90-degree-rotated counterpart of swe_s_v
-      // (previously identical to the vertical variant in the base SVG).
+    case 'swe_s_h': {
+      // Swedish S-figur Horizontal: the rotated counterpart of swe_s_v, again filling
+      // the full declared box (rx = ry * H/W keeps the end caps semicircular).
+      const a = 1 / aspectOf(target, 2.5); // height / width
       innerContent = `
-        <rect x="1" y="25" width="98" height="50" rx="25" fill="${color}" stroke="${border}" stroke-width="2"/>
-        <rect x="14" y="34" width="72" height="32" rx="16" fill="none" stroke="${border}" stroke-width="1" stroke-dasharray="2 2"/>
-        <rect x="28" y="41" width="44" height="18" rx="9" fill="none" stroke="${border}" stroke-width="1" stroke-dasharray="2 2"/>
-        <circle cx="20" cy="50" r="1.5" fill="${border}"/>
-        <circle cx="50" cy="50" r="1.5" fill="${border}"/>
-        <circle cx="80" cy="50" r="1.5" fill="${border}"/>
+        <rect x="1" y="1" width="98" height="98" rx="${49 * a}" ry="49" fill="${color}" stroke="${border}" stroke-width="2"/>
+        <rect x="14" y="18" width="72" height="64" rx="${32 * a}" ry="32" fill="none" stroke="${border}" stroke-width="1" stroke-dasharray="2 2"/>
+        <rect x="28" y="32" width="44" height="36" rx="${18 * a}" ry="18" fill="none" stroke="${border}" stroke-width="1" stroke-dasharray="2 2"/>
+        <ellipse cx="20" cy="50" rx="${3 * a}" ry="3" fill="${border}"/>
+        <ellipse cx="50" cy="50" rx="${3 * a}" ry="3" fill="${border}"/>
+        <ellipse cx="80" cy="50" rx="${3 * a}" ry="3" fill="${border}"/>
       `;
       break;
+    }
 
     case 'swe_l':
     case 'swe_l1':
@@ -354,8 +400,8 @@ export function renderTargetSVGString(target, widthPx = 120, heightPx = 120) {
       // and bottom, straight parallel sides through the middle) — not a simple
       // 4-point diamond, per the reference chart.
       innerContent = `
-        <polygon points="50,2 75,20 75,80 50,98 25,80 25,20" fill="${color}" stroke="${border}" stroke-width="2"/>
-        <polygon points="50,15 65,28 65,72 50,88 35,72 35,28" fill="none" stroke="${border}" stroke-width="1" stroke-dasharray="2 2"/>
+        <polygon points="50,1 99,19 99,81 50,99 1,81 1,19" fill="${color}" stroke="${border}" stroke-width="2"/>
+        <polygon points="50,14 78,28 78,72 50,86 22,72 22,28" fill="none" stroke="${border}" stroke-width="1" stroke-dasharray="2 2"/>
       `;
       break;
 
@@ -363,7 +409,7 @@ export function renderTargetSVGString(target, widthPx = 120, heightPx = 120) {
       // Swedish C 15 D: a simple solid rounded blob (no inner scoring rings visible
       // on the reference chart at this target's small size).
       innerContent = `
-        <circle cx="50" cy="50" r="47" fill="${color}" stroke="${border}" stroke-width="2"/>
+        <circle cx="50" cy="50" r="49" fill="${color}" stroke="${border}" stroke-width="2"/>
       `;
       break;
 
@@ -637,6 +683,16 @@ export function renderTargetSVGString(target, widthPx = 120, heightPx = 120) {
     default:
       innerContent = `<rect x="1" y="1" width="98" height="98" fill="${color}" stroke="${border}" stroke-width="2"/>`;
       break;
+  }
+
+  // Shapes drawn with margins inside the 100x100 design box are mapped so their
+  // visible outline (stroke included) spans the box exactly — see SHAPE_FIT.
+  const fit = SHAPE_FIT[type];
+  if (fit) {
+    const [x0, y0, x1, y1] = fit;
+    const sx = 100 / (x1 - x0);
+    const sy = 100 / (y1 - y0);
+    innerContent = `<g transform="matrix(${sx} 0 0 ${sy} ${-x0 * sx} ${-y0 * sy})">${innerContent}</g>`;
   }
 
   // preserveAspectRatio="none": callers may request a non-square widthPx/heightPx

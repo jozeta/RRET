@@ -8,60 +8,68 @@ import { TargetsController } from './targets.js';
 import { ScopeEngine } from './scope.js';
 import { TrainingManager } from './training.js';
 import { TutorialController } from './tutorial.js';
+import { StationController } from './station.js';
+import { AnalyticsController } from './analytics.js';
 import { loadReticles } from './reticles.js';
 import { sfx, escapeHTML } from './utils.js';
+import { formatDistance } from './scenario-logic.js';
+
+const PAGES = ['home', 'simulator', 'learn', 'targets', 'settings', 'about'];
 
 class Application {
   constructor() {
-    this.activePage = 'home';
+    StorageManager.migrate();
+    this.activePage = null;
     this.storage = StorageManager;
     this.reticles = [];
     this.settingsController = new SettingsController(this);
     this.targetsController = new TargetsController(this);
     this.scope = new ScopeEngine('scope-canvas', 'scope-reticle-svg', 'scope-hud-mag');
     this.training = new TrainingManager(this);
+    this.station = new StationController(this);
     this.tutorial = new TutorialController(this);
+    this.analytics = new AnalyticsController(this);
   }
 
   async init() {
-    console.log('Initializing Rifle Range Estimation Trainer...');
-
-    // 0. Load reticle catalog & populate dropdowns (must happen before settings
-    // form is read/written, since it sets .value on these <select> elements)
+    // 0. Reticle catalog first: it fills the <select>s the settings form writes to.
     this.reticles = await loadReticles();
     this.populateReticleSelects();
 
-    // 1. Initialize settings & themes
+    // 1. Settings & theme
     this.settingsController.init();
 
-    // 2. Initialize target library
+    // 2. Target library
     await this.targetsController.init();
 
-    // 3. Initialize Scope canvas
+    // 3. Scope
     this.scope.init();
-    const currentSettings = StorageManager.getSettings();
-    this.scope.updateSettings(currentSettings);
+    this.scope.updateSettings(StorageManager.getSettings());
 
-    // 4. Initialize Training simulator & Tutorial
+    // 4. Training, station mode, tutorial, analytics
     this.training.init();
+    this.station.init();
     this.tutorial.init();
+    this.analytics.init();
 
-    // 5. Navigation Router & UI bindings
+    // 5. Navigation & stats
     this.bindNavigation();
+    this.bindScopeControlsBar();
     this.updateStatsUI();
 
-    // 6. Generate initial training scenario in memory
+    // 6. First scenario (the timer only starts once the simulator is visible)
     this.training.startNewScenario();
 
-    // Handle initial hash router if any
-    const hash = window.location.hash.replace('#', '');
-    if (['home', 'simulator', 'learn', 'targets', 'settings', 'about'].includes(hash)) {
-      this.navigateTo(hash);
-    } else {
-      this.navigateTo('home');
-    }
+    // 7. Route to the page in the URL
+    this.showPage(this.pageFromHash(), { initial: true });
 
-    this.bindScopeControlsBar();
+    // 8. Offline support (FEAT-008)
+    this.registerServiceWorker();
+  }
+
+  registerServiceWorker() {
+    if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+    navigator.serviceWorker.register('sw.js').catch(err => console.info('Offline mode unavailable:', err.message));
   }
 
   populateReticleSelects() {
@@ -76,81 +84,96 @@ class Application {
     if (settingsSelect) settingsSelect.innerHTML = optionsHTML;
   }
 
+  /** Changes and persists the reticle from anywhere (simulator, Learn page). */
+  setReticle(reticleId) {
+    this.settingsController.settings = StorageManager.saveSettings({ reticle: reticleId });
+    this.scope.updateSettings({ reticle: reticleId });
+  }
+
+  pageFromHash() {
+    const hash = window.location.hash.replace('#', '');
+    return PAGES.includes(hash) ? hash : 'home';
+  }
+
+  /**
+   * Hash-driven router: links only change location.hash and the hashchange handler
+   * shows the page, so browser Back/Forward work (audit BUG-009).
+   */
   bindNavigation() {
-    const links = document.querySelectorAll('[data-page-target]');
-    links.forEach(link => {
+    document.querySelectorAll('[data-page-target]').forEach(link => {
       link.addEventListener('click', (e) => {
         e.preventDefault();
-        const targetPage = e.currentTarget.dataset.pageTarget;
-        this.navigateTo(targetPage);
+        this.navigateTo(e.currentTarget.dataset.pageTarget);
       });
     });
+    window.addEventListener('hashchange', () => this.showPage(this.pageFromHash()));
   }
 
   navigateTo(pageId) {
-    this.activePage = pageId;
-    window.location.hash = pageId;
-
-    // Toggle active view sections
-    document.querySelectorAll('.page-view').forEach(sec => {
-      sec.classList.remove('active');
-    });
-
-    const targetSec = document.getElementById(`page-${pageId}`);
-    if (targetSec) {
-      targetSec.classList.add('active');
-    }
-
-    // Toggle navbar links active class
-    document.querySelectorAll('.nav-link-tactical').forEach(link => {
-      if (link.dataset.pageTarget === pageId) {
-        link.classList.add('active');
-      } else {
-        link.classList.remove('active');
-      }
-    });
-
-    sfx.playClick();
-
-    // Refresh canvas on entering simulator tab
-    if (pageId === 'simulator') {
-      setTimeout(() => {
-        this.scope.resizeCanvas();
-        this.scope.render();
-      }, 50);
+    if (!PAGES.includes(pageId)) return;
+    if (window.location.hash !== `#${pageId}`) {
+      window.location.hash = pageId; // triggers hashchange -> showPage
+    } else {
+      this.showPage(pageId);
     }
   }
 
+  showPage(pageId, { initial = false } = {}) {
+    const previous = this.activePage;
+    this.activePage = pageId;
+
+    document.querySelectorAll('.page-view').forEach(sec => sec.classList.remove('active'));
+    const targetSec = document.getElementById(`page-${pageId}`);
+    if (targetSec) targetSec.classList.add('active');
+
+    document.querySelectorAll('.nav-link-tactical').forEach(link => {
+      const active = link.dataset.pageTarget === pageId;
+      link.classList.toggle('active', active);
+      if (active) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    });
+
+    // Close the mobile menu after choosing a page (audit BUG-016).
+    const collapseEl = document.getElementById('navbarContent');
+    if (collapseEl && collapseEl.classList.contains('show') && window.bootstrap) {
+      window.bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false }).hide();
+    }
+
+    if (!initial && previous !== pageId) {
+      sfx.playClick();
+      window.scrollTo({ top: 0 });
+    }
+
+    if (pageId === 'simulator') {
+      // The canvas has no size while its page is hidden; size it once visible.
+      requestAnimationFrame(() => this.scope.resizeCanvas());
+      this.training.onSimulatorShown();
+      this.station.onSimulatorShown();
+    } else if (previous === 'simulator') {
+      this.training.onSimulatorHidden();
+      this.station.onSimulatorHidden();
+    }
+    if (pageId === 'home') this.analytics.render();
+  }
+
   startScenarioWithTarget(target) {
+    if (this.station.active) this.station.cancel();
     this.training.startNewScenario(target);
   }
 
   updateStatsUI() {
     const stats = StorageManager.getStats();
     const history = StorageManager.getHistory();
+    const unit = StorageManager.getSettings().unit;
 
-    const roundsPlayedEl = document.getElementById('stat-rounds-played');
-    if (roundsPlayedEl) roundsPlayedEl.textContent = stats.roundsPlayed;
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('stat-rounds-played', stats.roundsPlayed);
+    set('stat-best-score', stats.bestScore);
+    const avg = stats.roundsPlayed > 0 ? stats.totalErrorPct / stats.roundsPlayed : 0;
+    set('stat-avg-error', `${avg.toFixed(1)}%`);
+    set('stat-accuracy-pct', `${stats.roundsPlayed > 0 ? Math.max(0, Math.round(100 - avg)) : 0}%`);
+    set('stat-best-accuracy', `${stats.personalBestAccuracyPct}%`);
 
-    const bestScoreEl = document.getElementById('stat-best-score');
-    if (bestScoreEl) bestScoreEl.textContent = stats.bestScore;
-
-    const avgErrorEl = document.getElementById('stat-avg-error');
-    if (avgErrorEl) {
-      const avg = stats.roundsPlayed > 0 ? (stats.totalErrorPct / stats.roundsPlayed).toFixed(1) : 0;
-      avgErrorEl.textContent = `${avg}%`;
-    }
-
-    const accuracyEl = document.getElementById('stat-accuracy-pct');
-    if (accuracyEl) {
-      const acc = stats.roundsPlayed > 0 ? Math.max(0, Math.round(100 - (stats.totalErrorPct / stats.roundsPlayed))) : 0;
-      accuracyEl.textContent = `${acc}%`;
-    }
-
-    const bestAccuracyEl = document.getElementById('stat-best-accuracy');
-    if (bestAccuracyEl) bestAccuracyEl.textContent = `${stats.personalBestAccuracyPct}%`;
-
-    // History Table Rendering
     const historyTableBody = document.getElementById('history-table-body');
     if (historyTableBody) {
       if (history.length === 0) {
@@ -160,56 +183,53 @@ class Application {
           </tr>
         `;
       } else {
-        const settings = StorageManager.getSettings();
-        const isImperial = settings.unit === 'imperial';
-
         historyTableBody.innerHTML = history.slice(0, 15).map(h => {
-          const dateStr = new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          const actualStr = isImperial ? `${Math.round(h.actualDistanceMeters * 1.09361)} yd` : `${h.actualDistanceMeters} m`;
-          const estStr = isImperial ? `${Math.round(h.estimatedDistanceMeters * 1.09361)} yd` : `${h.estimatedDistanceMeters} m`;
-          const errorStr = isImperial
-            ? `${Math.round(h.errorMeters * 1.09361)} yd (${h.errorPct}%)`
-            : `${h.errorMeters}m (${h.errorPct}%)`;
+          const d = new Date(h.timestamp);
+          const dateStr = Number.isNaN(d.getTime()) ? '–'
+            : d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+          const errAbs = Math.abs((h.estimatedDistanceMeters || 0) - (h.actualDistanceMeters || 0));
           const timeStr = Number.isFinite(h.timeSeconds)
             ? `${String(Math.floor(h.timeSeconds / 60)).padStart(2, '0')}:${String(h.timeSeconds % 60).padStart(2, '0')}`
             : '--:--';
+          const score = Number(h.score) || 0;
+          const errPct = Number(h.errorPct) || 0;
 
           return `
             <tr>
-              <td class="mono-font text-muted small">${dateStr}</td>
-              <td class="tactical-font text-tan-light">${escapeHTML(h.targetName)}</td>
-              <td class="mono-font text-orange-highlight">${actualStr}</td>
-              <td class="mono-font">${estStr}</td>
-              <td class="mono-font ${h.errorPct <= 5 ? 'text-success' : 'text-warning'}">${errorStr}</td>
+              <td class="mono-font text-muted small">${escapeHTML(dateStr)}</td>
+              <td class="tactical-font text-tan-light">${escapeHTML(h.targetName)}${h.mode === 'station' ? ' <span class="badge badge-olive">station</span>' : ''}</td>
+              <td class="mono-font text-orange-highlight">${escapeHTML(formatDistance(h.actualDistanceMeters, unit))}</td>
+              <td class="mono-font">${escapeHTML(formatDistance(h.estimatedDistanceMeters, unit))}</td>
+              <td class="mono-font ${errPct <= 5 ? 'text-success' : 'text-warning'}">${escapeHTML(formatDistance(errAbs, unit))} (${errPct}%)</td>
               <td class="mono-font text-muted small">${timeStr}</td>
-              <td><span class="badge ${h.score >= 80 ? 'bg-success' : 'bg-warning text-dark'}">${h.score} PTS</span></td>
+              <td><span class="badge ${score >= 80 ? 'bg-success' : 'bg-warning text-dark'}">${score} PTS</span></td>
             </tr>
           `;
         }).join('');
       }
     }
+    if (this.activePage === 'home') this.analytics.render();
   }
 
   bindScopeControlsBar() {
-    // Zoom presets
-    document.querySelectorAll('.btn-zoom-step').forEach(btn => {
+    // Zoom presets: bound by data-zoom inside the preset group only, never by the
+    // shared styling class (audit BUG-004 / ARCH-002).
+    document.querySelectorAll('#zoom-presets [data-zoom]').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const val = parseFloat(e.currentTarget.dataset.zoom);
-        this.scope.setZoom(val);
+        this.scope.setZoom(parseFloat(e.currentTarget.dataset.zoom));
+        this.scope.hideHint();
         sfx.playClick();
       });
     });
 
-    // Reticle switcher quick dropdown
     const reticleSel = document.getElementById('sim-reticle-select');
     if (reticleSel) {
       reticleSel.addEventListener('change', (e) => {
-        this.scope.updateSettings({ reticle: e.target.value });
+        this.setReticle(e.target.value);
         sfx.playClick();
       });
     }
 
-    // Environment switcher quick dropdown
     const environmentSel = document.getElementById('sim-environment-select');
     if (environmentSel) {
       environmentSel.addEventListener('change', (e) => {
@@ -218,7 +238,6 @@ class Application {
       });
     }
 
-    // Distance-range filter — takes effect on the next generated scenario.
     const distanceSel = document.getElementById('sim-distance-filter');
     if (distanceSel) {
       distanceSel.addEventListener('change', (e) => {
@@ -227,22 +246,16 @@ class Application {
       });
     }
 
-    // D-Pad Pan Controls
-    const dpadUp = document.getElementById('dpad-up');
-    const dpadDown = document.getElementById('dpad-down');
-    const dpadLeft = document.getElementById('dpad-left');
-    const dpadRight = document.getElementById('dpad-right');
-    const dpadReset = document.getElementById('dpad-reset');
-
-    if (dpadUp) dpadUp.addEventListener('click', () => this.scope.panByPixels(0, 20));
-    if (dpadDown) dpadDown.addEventListener('click', () => this.scope.panByPixels(0, -20));
-    if (dpadLeft) dpadLeft.addEventListener('click', () => this.scope.panByPixels(20, 0));
-    if (dpadRight) dpadRight.addEventListener('click', () => this.scope.panByPixels(-20, 0));
-    if (dpadReset) dpadReset.addEventListener('click', () => this.scope.centerTarget());
+    const pan = (dx, dy) => () => this.scope.panByPixels(dx, dy);
+    const bind = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener('click', fn); };
+    bind('dpad-up', pan(0, 20));
+    bind('dpad-down', pan(0, -20));
+    bind('dpad-left', pan(20, 0));
+    bind('dpad-right', pan(-20, 0));
+    bind('dpad-reset', () => this.scope.centerTarget());
   }
 }
 
-// Instantiate and start app on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
   window.app = new Application();
   window.app.init();

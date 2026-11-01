@@ -3,426 +3,436 @@
    ========================================================================== */
 
 import { StorageManager } from './storage.js';
-import { calculateDistance, calculateMIL, calculateScoreAndRating, sfx, metersToYards, yardsToMeters } from './utils.js';
+import { calculateScoreAndRating, sfx, metersToYards, yardsToMeters, escapeHTML } from './utils.js';
 import { TARGET_CATEGORIES } from './targets.js';
+import {
+  DISTANCE_BANDS, filterTargetPool, buildScenario, resolveEnvironment,
+  formatDistance, formatSize, formulaLine
+} from './scenario-logic.js';
+import { diagnoseEstimate } from './coach.js';
+import { setFieldError, toast } from './ui.js';
 
-const ENVIRONMENTS = ['forest', 'field', 'snow', 'mountain', 'desert', 'urban', 'range', 'fog', 'rain', 'dusk'];
-
-// Hunting-category targets (deer, elk, bear, etc.) only ever appear against a
-// forest or mountain backdrop — the other environments (range, urban, fog...)
-// don't make sense for a game animal scenario.
-const HUNTING_ENVIRONMENTS = ['forest', 'mountain'];
-
-const DISTANCE_BANDS = {
-  close: { min: 0, max: 200 },
-  medium: { min: 200, max: 500 },
-  long: { min: 500, max: 850 },
-  extreme: { min: 850, max: Infinity }
-};
+const isCoarsePointer = () => window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
 
 export class TrainingManager {
   constructor(app) {
     this.app = app;
     this.currentScenario = null;
-    this.shotTimerStart = null;
-    this.shotTimerInterval = null;
-    this.elapsedSeconds = 0;
-    // 'random' (default) picks a new environment each scenario; any other value
-    // pins every scenario to that environment until changed.
-    this.environmentPreference = 'random';
-    // Empty set = no restriction (draw from every category). Populated = only
-    // draw random scenarios from these categories.
-    this.categoryFilter = new Set();
-    // 'any' (default) = no restriction; otherwise a key into DISTANCE_BANDS.
-    this.distanceFilter = 'any';
+
+    // Shot timer: accumulates only while the simulator is visible (audit BUG-014).
+    this.timerAccumMs = 0;
+    this.timerRunningSince = null;
+    this.timerInterval = null;
+    this.simulatorVisible = false;
+
+    // Persisted simulator preferences (audit BUG-017).
+    const prefs = StorageManager.getSimPrefs();
+    this.environmentPreference = prefs.environment;
+    this.categoryFilter = new Set(prefs.categories.filter(c => TARGET_CATEGORIES.includes(c)));
+    this.distanceFilter = DISTANCE_BANDS[prefs.distance] ? prefs.distance : 'any';
+
+    // Optional station mode controller (FEAT-004) registers itself here.
+    this.station = null;
   }
 
   init() {
     this.bindEvents();
     this.renderCategoryFilterUI();
+    const envSel = document.getElementById('sim-environment-select');
+    if (envSel) envSel.value = this.environmentPreference;
+    const distSel = document.getElementById('sim-distance-filter');
+    if (distSel) distSel.value = this.distanceFilter;
+    this.applyCoachModeUI();
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.pauseTimer();
+      else if (this.simulatorVisible) this.resumeTimer();
+    });
+  }
+
+  get unit() {
+    return StorageManager.getSettings().unit === 'imperial' ? 'imperial' : 'metric';
+  }
+
+  persistPrefs() {
+    StorageManager.saveSimPrefs({
+      environment: this.environmentPreference,
+      categories: [...this.categoryFilter],
+      distance: this.distanceFilter
+    });
   }
 
   setDistanceFilter(value) {
-    this.distanceFilter = value;
+    this.distanceFilter = DISTANCE_BANDS[value] ? value : 'any';
+    this.persistPrefs();
+    this.updateFilterStatus();
   }
 
   /**
-   * Toggle-button category filter for the simulator's random scenario picker
-   * (separate from the Target Library page's single-select category tabs).
-   * "All" clears the filter; clicking an active category removes it.
+   * Toggle-button category filter for the simulator's random scenario picker.
+   * "All" clears the filter; clicking an active category removes it. Buttons are
+   * identified by data-category — never by a styling class (audit BUG-004).
    */
   renderCategoryFilterUI() {
     const container = document.getElementById('sim-category-filter-buttons');
     if (!container) return;
 
     const isAllActive = this.categoryFilter.size === 0;
-    const buttonsHTML = [
-      `<button type="button" class="btn-zoom-step ${isAllActive ? 'active' : ''}" data-category="All">All</button>`,
-      ...TARGET_CATEGORIES.map(cat => `
-        <button type="button" class="btn-zoom-step ${this.categoryFilter.has(cat) ? 'active' : ''}" data-category="${cat}">${cat}</button>
-      `)
-    ];
-    container.innerHTML = buttonsHTML.join('');
+    const button = (cat, active) =>
+      `<button type="button" class="btn-zoom-step btn-filter-category ${active ? 'active' : ''}" data-category="${escapeHTML(cat)}" aria-pressed="${active}">${escapeHTML(cat)}</button>`;
+    container.innerHTML = [button('All', isAllActive), ...TARGET_CATEGORIES.map(cat => button(cat, this.categoryFilter.has(cat)))].join('');
 
-    container.querySelectorAll('button').forEach(btn => {
+    container.querySelectorAll('button[data-category]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         this.toggleCategoryFilter(e.currentTarget.dataset.category);
         sfx.playClick();
       });
     });
+    this.updateFilterStatus();
   }
 
   toggleCategoryFilter(category) {
-    if (category === 'All') {
-      this.categoryFilter.clear();
-    } else if (this.categoryFilter.has(category)) {
-      this.categoryFilter.delete(category);
-    } else {
-      this.categoryFilter.add(category);
-    }
+    if (category === 'All') this.categoryFilter.clear();
+    else if (this.categoryFilter.has(category)) this.categoryFilter.delete(category);
+    else this.categoryFilter.add(category);
+    this.persistPrefs();
     this.renderCategoryFilterUI();
   }
 
-  /** Targets a random scenario is allowed to draw from, respecting categoryFilter
-   *  and distanceFilter. */
   getFilteredTargetPool() {
-    let pool = this.app.targetsController.getAllTargets();
-
-    if (this.categoryFilter.size > 0) {
-      pool = pool.filter(t => {
-        // 'Custom' means user-created, regardless of what category text they typed;
-        // everything else matches the target's category field exactly, matching how
-        // the Target Library page's own category tabs filter (see targets.js).
-        if (this.categoryFilter.has('Custom') && !t.isBuiltIn) return true;
-        return this.categoryFilter.has(t.category);
-      });
-    }
-
-    if (this.distanceFilter !== 'any') {
-      const band = DISTANCE_BANDS[this.distanceFilter];
-      pool = pool.filter(t => {
-        // A target with no declared range isn't constrained to any particular
-        // band, so it stays eligible everywhere rather than being excluded.
-        if (!t.minDistance || !t.maxDistance) return true;
-        return t.minDistance <= band.max && t.maxDistance >= band.min;
-      });
-    }
-
-    return pool;
+    return filterTargetPool(this.app.targetsController.getAllTargets(), {
+      categories: [...this.categoryFilter],
+      distance: this.distanceFilter
+    });
   }
 
-  /**
-   * The [min,max] meters to actually roll a scenario distance within, given the
-   * active distance-band filter (if any). Returns null to signal "use the generic
-   * weighted fallback range" (no target-specific range, no active filter).
-   */
-  getEffectiveDistanceRange(target) {
-    const band = this.distanceFilter !== 'any' ? DISTANCE_BANDS[this.distanceFilter] : null;
-
-    if (target.minDistance && target.maxDistance) {
-      if (!band) return { min: target.minDistance, max: target.maxDistance };
-      // Clamp to the overlap of the target's own range and the selected band —
-      // picking "Close" shouldn't still be able to roll a target's own 300m max.
-      const min = Math.max(target.minDistance, band.min);
-      const max = Math.min(target.maxDistance, band.max);
-      return min <= max ? { min, max } : { min: target.minDistance, max: target.maxDistance };
-    }
-
-    if (band) {
-      return { min: Math.max(1, band.min), max: Number.isFinite(band.max) ? band.max : 1200 };
-    }
-
-    return null;
-  }
-
-  /**
-   * Resolves which environment a scenario should actually use for the given
-   * target + the current environment preference. Hunting-category targets are
-   * restricted to forest/mountain regardless of preference: 'random' picks
-   * between just those two, and an explicit but incompatible pick (e.g. "Urban")
-   * still falls back to a forest/mountain roll rather than being honored as-is.
-   */
-  resolveEnvironment(target, pref) {
-    const isHunting = target && target.category === 'Hunting';
-    if (isHunting) {
-      if (pref !== 'random' && HUNTING_ENVIRONMENTS.includes(pref)) return pref;
-      return HUNTING_ENVIRONMENTS[Math.floor(Math.random() * HUNTING_ENVIRONMENTS.length)];
-    }
-    return pref === 'random'
-      ? ENVIRONMENTS[Math.floor(Math.random() * ENVIRONMENTS.length)]
-      : pref;
+  /** "N targets match" next to the filters, or a warning when nothing does (BUG-005). */
+  updateFilterStatus() {
+    const el = document.getElementById('sim-filter-status');
+    if (!el || !this.app.targetsController) return;
+    const n = this.getFilteredTargetPool().length;
+    el.classList.toggle('text-warning', n === 0);
+    el.classList.toggle('text-muted', n > 0);
+    el.textContent = n === 0
+      ? 'No targets match these filters. Change a filter to get new scenarios.'
+      : `${n} target${n === 1 ? '' : 's'} match`;
   }
 
   /**
    * Called from the simulator's environment dropdown. Applies immediately to the
-   * in-progress scenario (same target/distance, just a different backdrop) rather
-   * than waiting for the next scenario, so the choice reads as instant feedback.
+   * in-progress scenario (same target/distance, new backdrop).
    */
   setEnvironmentPreference(pref) {
     this.environmentPreference = pref;
+    this.persistPrefs();
     if (this.currentScenario) {
-      this.currentScenario.environment = this.resolveEnvironment(this.currentScenario.target, pref);
-      this.updateScenarioUI();
+      this.currentScenario.environment = resolveEnvironment(this.currentScenario.target, pref);
+      this.updateScenarioUI({ keepInput: true });
       this.app.scope.setScenario(this.currentScenario);
     }
   }
 
+  /**
+   * Starts a new random scenario (or one for `forcedTarget`). Returns false and
+   * keeps the current scenario when the active filters match no targets, rather
+   * than silently ignoring them (audit BUG-005).
+   */
   startNewScenario(forcedTarget = null) {
-    let pool = this.getFilteredTargetPool();
-    if (pool.length === 0) {
-      // The active category filter matches nothing (e.g. only "Custom" selected
-      // but no custom targets exist yet) — fall back to the full library rather
-      // than silently doing nothing.
-      pool = this.app.targetsController.getAllTargets();
-    }
-    if (!forcedTarget && pool.length === 0) return;
-
-    const target = forcedTarget || pool[Math.floor(Math.random() * pool.length)];
-
-    let distance;
-    const effectiveRange = this.getEffectiveDistanceRange(target);
-    if (effectiveRange) {
-      // Target's official distance range (from PDF column 4 for built-ins, or a
-      // user-set range for custom targets), clamped to the active distance-band
-      // filter if one is selected.
-      distance = Math.round(effectiveRange.min + Math.random() * (effectiveRange.max - effectiveRange.min));
-    } else {
-      // Fallback weighted distance range
-      const distanceRanges = [
-        { min: 50, max: 200, weight: 0.25 },
-        { min: 200, max: 500, weight: 0.45 },
-        { min: 500, max: 850, weight: 0.20 },
-        { min: 850, max: 1200, weight: 0.10 }
-      ];
-      
-      const rand = Math.random();
-      let cumulative = 0;
-      let selectedRange = distanceRanges[1];
-      for (const r of distanceRanges) {
-        cumulative += r.weight;
-        if (rand <= cumulative) {
-          selectedRange = r;
-          break;
+    if (this.station && this.station.active && !forcedTarget) return false;
+    let target = forcedTarget;
+    if (!target) {
+      let pool = this.getFilteredTargetPool();
+      if (pool.length === 0) {
+        this.updateFilterStatus();
+        const all = this.app.targetsController.getAllTargets();
+        if (this.currentScenario || all.length === 0) {
+          if (all.length > 0) toast('No targets match the current filters, so no new scenario was started.', 'warning');
+          return false;
         }
+        // First scenario of the session with saved filters that match nothing:
+        // there is nothing on screen to keep, so show any target and say why.
+        toast('Your saved filters match no targets, so this first scenario uses the whole library. Adjust the filters under Scenario options.', 'warning', 8000);
+        pool = all;
       }
-
-      distance = Math.round(
-        selectedRange.min + Math.random() * (selectedRange.max - selectedRange.min)
-      );
+      target = pool[Math.floor(Math.random() * pool.length)];
     }
 
-    // Random small offset from reticle center (-3 to +3 MILs)
-    const offsetX = Number((Math.random() * 6 - 3).toFixed(1));
-    const offsetY = Number((Math.random() * 4 - 2).toFixed(1));
-
-    const environment = this.resolveEnvironment(target, this.environmentPreference);
-
-    const milHeight = Number(calculateMIL(target.height, distance).toFixed(2));
-    const milWidth = Number(calculateMIL(target.width, distance).toFixed(2));
-
-    this.currentScenario = {
-      id: 'scen_' + Date.now(),
-      target,
-      distance,
-      offsetX,
-      offsetY,
-      environment,
-      milHeight,
-      milWidth
-    };
-
-    // Update UI HUD & Scope
-    this.updateScenarioUI();
-    this.app.scope.setScenario(this.currentScenario);
-    this.resetTimer();
-    this.startTimer();
+    const scenario = buildScenario(target, {
+      distance: this.distanceFilter,
+      unit: this.unit,
+      environment: this.environmentPreference
+    });
+    this.loadScenario(scenario);
+    return true;
   }
 
-  updateScenarioUI() {
+  /** Shows a scenario in the scope and resets the answer form and timer. */
+  loadScenario(scenario) {
+    this.currentScenario = scenario;
+    this.updateScenarioUI();
+    this.app.scope.setScenario(scenario);
+    this.resetTimer();
+    if (this.simulatorVisible) this.resumeTimer();
+  }
+
+  updateScenarioUI({ keepInput = false } = {}) {
     if (!this.currentScenario) return;
     const s = this.currentScenario;
-    const settings = StorageManager.getSettings();
-    const isImperial = settings.unit === 'imperial';
+    const unit = this.unit;
 
-    // Target Info Card
-    const targetNameEl = document.getElementById('sim-target-name');
-    if (targetNameEl) targetNameEl.textContent = s.target.name;
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set('sim-target-name', s.target.name);
+    set('sim-target-category', s.target.category || 'Field Target');
+    set('sim-target-height', formatSize(s.target.height, unit));
+    set('sim-target-width', formatSize(s.target.width, unit));
+    set('sim-environment', s.environment.toUpperCase());
+    set('sim-unit-label', unit === 'imperial' ? 'YARDS' : 'METERS');
 
-    const targetCategoryEl = document.getElementById('sim-target-category');
-    if (targetCategoryEl) targetCategoryEl.textContent = s.target.category || 'Field Target';
-
-    const targetHeightEl = document.getElementById('sim-target-height');
-    if (targetHeightEl) {
-      if (isImperial) {
-        const heightInches = (s.target.height * 39.3701).toFixed(1);
-        targetHeightEl.textContent = `${heightInches} in (${s.target.height} m)`;
-      } else {
-        const heightCm = Math.round(s.target.height * 100);
-        targetHeightEl.textContent = `${s.target.height} m (${heightCm} cm)`;
-      }
-    }
-
-    const targetWidthEl = document.getElementById('sim-target-width');
-    if (targetWidthEl) {
-      if (isImperial) {
-        const widthInches = (s.target.width * 39.3701).toFixed(1);
-        targetWidthEl.textContent = `${widthInches} in (${s.target.width} m)`;
-      } else {
-        const widthCm = Math.round(s.target.width * 100);
-        targetWidthEl.textContent = `${s.target.width} m (${widthCm} cm)`;
-      }
-    }
-
-    const envEl = document.getElementById('sim-environment');
-    if (envEl) envEl.textContent = s.environment.toUpperCase();
-
-    // Reset input form
     const inputEl = document.getElementById('sim-estimated-distance');
+    const milEl = document.getElementById('sim-mil-reading');
     if (inputEl) {
-      inputEl.value = '';
-      inputEl.placeholder = isImperial ? 'Distance in yards' : 'Distance in meters';
-      inputEl.focus();
+      if (!keepInput) inputEl.value = '';
+      inputEl.placeholder = unit === 'imperial' ? 'Distance in yards' : 'Distance in meters';
+      setFieldError(inputEl, '');
     }
+    if (milEl && !keepInput) { milEl.value = ''; setFieldError(milEl, ''); }
+    this.setFormLocked(!!s.answered);
 
-    const unitLabel = document.getElementById('sim-unit-label');
-    if (unitLabel) unitLabel.textContent = isImperial ? 'YARDS' : 'METERS';
-
-    // Hide result card
-    const resultCard = document.getElementById('sim-result-card');
-    if (resultCard) resultCard.style.display = 'none';
+    if (!keepInput) {
+      const resultCard = document.getElementById('sim-result-card');
+      if (resultCard) resultCard.style.display = 'none';
+      // Auto-focus only with a fine pointer: on phones it pops the keyboard and
+      // scrolls the scope out of view (audit BUG-011).
+      if (inputEl && this.simulatorVisible && !isCoarsePointer()) inputEl.focus({ preventScroll: true });
+    }
   }
 
-  startTimer() {
-    this.shotTimerStart = Date.now();
-    this.elapsedSeconds = 0;
+  /** After an answer, lock the form so the same scenario can't be scored twice (BUG-003). */
+  setFormLocked(locked) {
+    const inputEl = document.getElementById('sim-estimated-distance');
+    const milEl = document.getElementById('sim-mil-reading');
+    const submitBtn = document.getElementById('btn-submit-estimate');
+    if (inputEl) inputEl.disabled = locked;
+    if (milEl) milEl.disabled = locked;
+    if (submitBtn) submitBtn.disabled = locked;
+  }
+
+  /** Re-render unit-dependent labels after a units change, keeping typed input (BUG-018). */
+  refreshUnits() {
+    this.updateScenarioUI({ keepInput: true });
+    const card = document.getElementById('sim-result-card');
+    if (card && card.style.display !== 'none' && this.lastResult) this.showResultBreakdown(this.lastResult);
+  }
+
+  applyCoachModeUI() {
+    const on = !!StorageManager.getSettings().coachMode;
+    const row = document.getElementById('sim-mil-reading-row');
+    if (row) row.hidden = !on;
+    const toggle = document.getElementById('sim-coach-toggle');
+    if (toggle) toggle.checked = on;
+  }
+
+  // ---- Shot timer ---------------------------------------------------------
+
+  elapsedMs() {
+    return this.timerAccumMs + (this.timerRunningSince ? Date.now() - this.timerRunningSince : 0);
+  }
+
+  renderTimer() {
     const timerEl = document.getElementById('sim-shot-timer');
-
-    if (this.shotTimerInterval) clearInterval(this.shotTimerInterval);
-    this.shotTimerInterval = setInterval(() => {
-      this.elapsedSeconds = Math.floor((Date.now() - this.shotTimerStart) / 1000);
-      if (timerEl) {
-        const mins = String(Math.floor(this.elapsedSeconds / 60)).padStart(2, '0');
-        const secs = String(this.elapsedSeconds % 60).padStart(2, '0');
-        timerEl.textContent = `${mins}:${secs}`;
-      }
-    }, 1000);
+    if (!timerEl) return;
+    const secs = Math.floor(this.elapsedMs() / 1000);
+    timerEl.textContent = `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
   }
 
-  stopTimer() {
-    if (this.shotTimerInterval) {
-      clearInterval(this.shotTimerInterval);
-      this.shotTimerInterval = null;
+  resumeTimer() {
+    if (!this.currentScenario || this.currentScenario.answered || this.timerRunningSince) return;
+    this.timerRunningSince = Date.now();
+    if (!this.timerInterval) this.timerInterval = setInterval(() => this.renderTimer(), 250);
+  }
+
+  pauseTimer() {
+    if (this.timerRunningSince) {
+      this.timerAccumMs += Date.now() - this.timerRunningSince;
+      this.timerRunningSince = null;
     }
+    if (this.timerInterval) { clearInterval(this.timerInterval); this.timerInterval = null; }
+    this.renderTimer();
   }
 
   resetTimer() {
-    this.stopTimer();
-    const timerEl = document.getElementById('sim-shot-timer');
-    if (timerEl) timerEl.textContent = '00:00';
+    this.pauseTimer();
+    this.timerAccumMs = 0;
+    this.renderTimer();
+  }
+
+  onSimulatorShown() {
+    this.simulatorVisible = true;
+    if (!document.hidden) this.resumeTimer();
+  }
+
+  onSimulatorHidden() {
+    this.simulatorVisible = false;
+    this.pauseTimer();
+  }
+
+  // ---- Answering ----------------------------------------------------------
+
+  /** Reads and validates the answer form. Returns { estimateMeters, userMil } or null. */
+  readAnswer() {
+    const inputEl = document.getElementById('sim-estimated-distance');
+    const milEl = document.getElementById('sim-mil-reading');
+    const unit = this.unit;
+    const raw = inputEl ? inputEl.value.trim().replace(',', '.') : '';
+    const userVal = parseFloat(raw);
+    if (!raw || !Number.isFinite(userVal) || userVal <= 0) {
+      setFieldError(inputEl, `Enter your estimated distance in ${unit === 'imperial' ? 'yards' : 'meters'} (a number above 0).`);
+      if (inputEl) inputEl.focus();
+      return null;
+    }
+    setFieldError(inputEl, '');
+
+    let userMil = null;
+    const coachOn = !!StorageManager.getSettings().coachMode;
+    if (coachOn && milEl) {
+      const milRaw = milEl.value.trim().replace(',', '.');
+      if (milRaw) {
+        userMil = parseFloat(milRaw);
+        if (!Number.isFinite(userMil) || userMil <= 0) {
+          setFieldError(milEl, 'Enter the MIL value you read (a number above 0), or leave it empty.');
+          milEl.focus();
+          return null;
+        }
+      }
+      setFieldError(milEl, '');
+    }
+
+    return {
+      userVal,
+      unit,
+      estimateMeters: unit === 'imperial' ? yardsToMeters(userVal) : userVal,
+      userMil
+    };
   }
 
   submitAnswer() {
-    if (!this.currentScenario) return;
+    const s = this.currentScenario;
+    if (!s || s.answered) return;
+    const answer = this.readAnswer();
+    if (!answer) return;
 
-    const inputEl = document.getElementById('sim-estimated-distance');
-    if (!inputEl || !inputEl.value) {
-      alert('Please enter your estimated distance.');
+    if (this.station && this.station.active) {
+      this.station.recordAnswer(answer);
       return;
     }
 
-    const userVal = parseFloat(inputEl.value);
-    if (isNaN(userVal) || userVal <= 0) {
-      alert('Please enter a valid positive distance.');
-      return;
-    }
+    this.pauseTimer();
+    s.answered = true;
+    this.setFormLocked(true);
 
-    this.stopTimer();
+    const evalResult = calculateScoreAndRating(answer.estimateMeters, s.distance);
+    const diagnostics = answer.userMil ? diagnoseEstimate(s, answer.userMil, answer.estimateMeters) : null;
+    const timeSeconds = Math.round(this.elapsedMs() / 1000);
 
-    const settings = StorageManager.getSettings();
-    const isImperial = settings.unit === 'imperial';
-
-    // Convert estimated distance to meters for math check if imperial
-    let estimatedMeters = isImperial ? yardsToMeters(userVal) : userVal;
-    const actualMeters = this.currentScenario.distance;
-
-    const evalResult = calculateScoreAndRating(estimatedMeters, actualMeters);
-
-    // Save round to LocalStorage
-    const roundRecord = {
-      scenarioId: this.currentScenario.id,
-      targetName: this.currentScenario.target.name,
-      actualDistanceMeters: actualMeters,
-      estimatedDistanceMeters: Math.round(estimatedMeters),
-      errorMeters: evalResult.errorAbs,
-      errorPct: evalResult.errorPct,
-      score: evalResult.score,
-      timeSeconds: this.elapsedSeconds
-    };
-
-    StorageManager.recordRound(roundRecord);
+    const saved = StorageManager.recordRound(this.buildRoundRecord(s, answer, evalResult, timeSeconds, 'free'));
+    if (!saved.ok) toast('This round could not be saved (browser storage unavailable or full).', 'warning');
     this.app.updateStatsUI();
 
-    // Play feedback SFX
-    if (evalResult.score >= 80) {
-      sfx.playSuccess();
-    } else {
-      sfx.playError();
-    }
+    if (evalResult.score >= 80) sfx.playSuccess();
+    else sfx.playError();
 
-    // Display Result Breakdown Card
-    this.showResultBreakdown(userVal, actualMeters, evalResult, isImperial);
+    this.lastResult = { scenario: s, answer, evalResult, diagnostics };
+    this.showResultBreakdown(this.lastResult);
   }
 
-  showResultBreakdown(userVal, actualMeters, result, isImperial) {
+  buildRoundRecord(s, answer, evalResult, timeSeconds, mode) {
+    return {
+      scenarioId: s.id,
+      mode,
+      targetId: s.target.id,
+      targetName: s.target.name,
+      targetCategory: s.target.isBuiltIn ? s.target.category : 'Custom',
+      actualDistanceMeters: Math.round(s.distance * 10) / 10,
+      estimatedDistanceMeters: Math.round(answer.estimateMeters),
+      errorMeters: evalResult.errorAbs,
+      errorPct: evalResult.errorPct,
+      signedErrorPct: Number((((answer.estimateMeters - s.distance) / s.distance) * 100).toFixed(2)),
+      score: evalResult.score,
+      unit: answer.unit,
+      milReading: answer.userMil || undefined,
+      timeSeconds
+    };
+  }
+
+  showResultBreakdown({ scenario: s, answer, evalResult: result, diagnostics }) {
     const resultCard = document.getElementById('sim-result-card');
     if (!resultCard) return;
+    const unit = this.unit;
 
-    const s = this.currentScenario;
-    const targetSize = s.target.height;
-    const milHeight = s.milHeight;
+    const badge = document.getElementById('res-score-badge');
+    badge.className = `badge ${result.badgeClass} fs-6 p-2`;
+    badge.textContent = `${result.score} PTS (${result.rating})`;
 
-    const displayActual = isImperial ? Math.round(metersToYards(actualMeters)) + ' yards' : actualMeters + ' meters';
-    const displayEstimated = isImperial ? Math.round(userVal) + ' yards' : userVal + ' meters';
+    document.getElementById('res-actual-dist').textContent = formatDistance(s.distance, unit, { long: true });
+    document.getElementById('res-estimated-dist').textContent = formatDistance(answer.estimateMeters, unit, { long: true });
+    const errAbs = Math.abs(answer.estimateMeters - s.distance);
+    const errStr = unit === 'imperial' ? `${Math.round(metersToYards(errAbs))} yd` : `${Math.round(errAbs)} m`;
+    document.getElementById('res-error-m').textContent = `${errStr} (${result.errorPct}%)`;
 
-    document.getElementById('res-score-badge').className = `badge ${result.badgeClass} fs-6 p-2`;
-    document.getElementById('res-score-badge').textContent = `${result.score} PTS (${result.rating})`;
+    // Both dimensions, in the active unit, plus what the user's answer implies.
+    const impliedMilH = (s.target.height * 1000) / answer.estimateMeters;
+    const impliedMilW = (s.target.width * 1000) / answer.estimateMeters;
+    const lines = [
+      formulaLine(s.target.height, s.distance, unit, 'Height'),
+      formulaLine(s.target.width, s.distance, unit, 'Width'),
+      `Your answer implies ${impliedMilH.toFixed(2)} MIL tall / ${impliedMilW.toFixed(2)} MIL wide (true: ${s.milHeight.toFixed(2)} / ${s.milWidth.toFixed(2)} MIL).`
+    ];
+    const math = document.getElementById('res-math-breakdown');
+    math.innerHTML = lines.map(l => `<div>${escapeHTML(l)}</div>`).join('');
 
-    document.getElementById('res-actual-dist').textContent = displayActual;
-    document.getElementById('res-estimated-dist').textContent = displayEstimated;
-    document.getElementById('res-error-m').textContent = `${result.errorAbs} m (${result.errorPct}%)`;
+    const coachEl = document.getElementById('res-coach');
+    if (coachEl) {
+      if (diagnostics) {
+        const sign = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+        const dimLabel = diagnostics.dimension === 'height' ? 'height' : 'width';
+        coachEl.innerHTML = `
+          <div class="tactical-font text-tan-accent mb-1" style="font-size:0.85rem;">COACH: WHERE DID THE ERROR COME FROM?</div>
+          <div>Reading: you read <strong>${diagnostics.userMil.toFixed(2)} MIL</strong> (${dimLabel}); true is ${diagnostics.trueMil.toFixed(2)} MIL → <strong>${sign(diagnostics.readingErrorPct)}</strong></div>
+          <div>Maths: your reading implies ${escapeHTML(formatDistance(diagnostics.impliedMeters, unit))}; you entered ${escapeHTML(formatDistance(answer.estimateMeters, unit))} → <strong>${sign(diagnostics.mathErrorPct)}</strong></div>
+          ${diagnostics.verdict ? `<div class="mt-1 text-warning">${escapeHTML(diagnostics.verdict)}</div>` : ''}
+        `;
+        coachEl.hidden = false;
+      } else {
+        coachEl.hidden = true;
+        coachEl.innerHTML = '';
+      }
+    }
 
-    // Step by Step Formula Callout
-    const formulaMath = `
-      Distance = (Target Height x 1000) / MIL Reading<br>
-      Distance = (${targetSize} m × 1000) / ${milHeight} MIL<br>
-      Distance = ${actualMeters} meters (${Math.round(metersToYards(actualMeters))} yards)
-    `;
-    document.getElementById('res-math-breakdown').innerHTML = formulaMath;
-
+    this.app.scope.showTruthOverlay(true);
     resultCard.style.display = 'block';
     resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    const nextBtn = document.getElementById('btn-next-scenario');
+    if (nextBtn && !isCoarsePointer()) nextBtn.focus({ preventScroll: true });
   }
 
   bindEvents() {
-    const submitBtn = document.getElementById('btn-submit-estimate');
-    if (submitBtn) {
-      submitBtn.addEventListener('click', () => {
-        this.submitAnswer();
-      });
-    }
-
-    const nextBtn = document.getElementById('btn-next-scenario');
-    if (nextBtn) {
-      nextBtn.addEventListener('click', () => {
-        this.startNewScenario();
-      });
-    }
-
+    // Only the form's submit event: the SUBMIT button is type="submit", so a click
+    // listener on it as well recorded every answer twice (audit BUG-002).
     const form = document.getElementById('sim-estimate-form');
     if (form) {
       form.addEventListener('submit', (e) => {
         e.preventDefault();
         this.submitAnswer();
+      });
+    }
+
+    const nextBtn = document.getElementById('btn-next-scenario');
+    if (nextBtn) nextBtn.addEventListener('click', () => this.startNewScenario());
+
+    const coachToggle = document.getElementById('sim-coach-toggle');
+    if (coachToggle) {
+      coachToggle.addEventListener('change', (e) => {
+        StorageManager.saveSettings({ coachMode: e.target.checked });
+        this.applyCoachModeUI();
       });
     }
   }

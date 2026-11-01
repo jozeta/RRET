@@ -5,6 +5,17 @@
 
 import { renderTargetSVGString, isSafeImageDataURI, sfx } from './utils.js';
 
+/** Real-world-ish scope profiles for realistic optics mode (FEAT-001). */
+export const SCOPE_PROFILES = {
+  arcade: { label: 'Arcade (1–25x, enlarged)', minZoom: 1, maxZoom: 25 },
+  lpvo: { label: 'LPVO 1–10x', minZoom: 1, maxZoom: 10 },
+  hunting: { label: 'Hunting 3–18x', minZoom: 3, maxZoom: 18 },
+  precision: { label: 'Precision 5–25x', minZoom: 5, maxZoom: 25 }
+};
+
+const ARCADE_PX_PER_MIL = 18; // pixels spanned by 1 MIL at "1x" in arcade mode
+const NOMINAL_CSS_PX_PER_MM = 96 / 25.4; // CSS reference pixel, before calibration
+
 export class ScopeEngine {
   constructor(canvasId, svgId, hudId) {
     this.canvas = document.getElementById(canvasId);
@@ -12,54 +23,93 @@ export class ScopeEngine {
     this.svgContainer = document.getElementById(svgId);
     this.hudElement = document.getElementById(hudId);
 
-    // Magnification & Optics parameters. Starts at the true 1x baseline (the
-    // "pixels per MIL at 1x" unit basePixelsPerMIL is defined against) — this also
-    // gives a freshly-opened reticle the most room to show its wide-angle features
-    // (tree grid / BDC ladder / duplex posts) before zooming in for precision work.
-    this.zoom = 1; // Current magnification
+    // Magnification & optics. In arcade mode 1 MIL = 18 CSS px x zoom (the original
+    // behaviour). In realistic mode the scale comes from a screen calibration and
+    // viewing distance so the target appears the size it would through a real scope.
+    this.zoom = 1;
     this.minZoom = 1;
     this.maxZoom = 25;
-    this.basePixelsPerMIL = 18; // Base pixels spanned by 1 MIL at 1x magnification
+    this.opticsMode = 'arcade';
+    this.scopeProfile = 'arcade';
+    this.screenPxPerMm = null;
+    this.viewingDistanceCm = 60;
 
-    // Viewport Panning offsets (in MIL units to maintain position across zoom)
-    this.panX = 0; // MIL offset
-    this.panY = 0; // MIL offset
+    // Viewport panning offsets (in MIL units so position survives zoom changes)
+    this.panX = 0;
+    this.panY = 0;
 
-    // Active Scenario State
+    // Active scenario state
     this.target = null;
     this.distance = 300; // meters
-    this.targetOffsetMILX = 0; // Target horizontal placement in MILs relative to reticle center
-    this.targetOffsetMILY = 0; // Target vertical placement in MILs relative to reticle center
-    this.environment = 'field'; // forest, field, snow, mountain, desert, urban, range, fog, rain, dusk
+    this.targetOffsetMILX = 0;
+    this.targetOffsetMILY = 0;
+    this.environment = 'field';
+    this.truthOverlay = false; // FEAT-003: brackets showing the true extents after answering
 
-    // Display / Reticle Settings
+    // Display / reticle settings
     this.reticleType = 'mil_dot';
     this.reticleColor = '#ff2a2a';
     this.reticleBrightness = 1.0;
     this.zoomSensitivity = 1.0;
     this.panSensitivity = 1.0;
 
-    // Pointer & Drag interaction tracking
+    // Pointer & drag tracking
     this.isDragging = false;
     this.lastPointerX = 0;
     this.lastPointerY = 0;
     this.pinchDistance = 0;
+    this.wheelAccum = 0;
+    this.lastWheelSoundAt = 0;
 
-    // Cache pre-rendered target image/canvas for high performance
+    // Render scheduling: input events only mark things dirty; one rAF paints (PERF-003).
+    this.canvasDirty = false;
+    this.reticleDirty = false;
+    this.frameRequested = false;
+
+    // Target raster cache, re-rasterized at higher resolution when zooming in (BUG-013).
     this.targetOffscreenCanvas = document.createElement('canvas');
+    this.rasterEdge = 0;
+    this.rasterToken = 0;
 
     this.bindEvents();
   }
 
+  /** CSS pixels spanned by 1 MIL at magnification `zoom`. */
+  pxPerMILAt(zoom = this.zoom) {
+    if (this.opticsMode === 'realistic') {
+      // Apparent angle through the scope is zoom x true angle. At viewing distance D
+      // that is D x zoom / 1000 mm on screen per MIL, converted to CSS px.
+      const pxPerMm = this.screenPxPerMm || NOMINAL_CSS_PX_PER_MM;
+      return zoom * (this.viewingDistanceCm * 10) / 1000 * pxPerMm;
+    }
+    return ARCADE_PX_PER_MIL * zoom;
+  }
+
+  get basePixelsPerMIL() {
+    return this.pxPerMILAt(1);
+  }
+
   init() {
     this.resizeCanvas();
-    // Sync the HUD magnification badge and zoom-button highlighting to the actual
-    // JS-side zoom state (index.html's "10.0X MAG" / active-button markup are just
-    // static placeholders and were never otherwise reconciled with this.zoom).
+    // Sync the HUD badge and preset highlighting to the actual zoom state.
     this.setZoom(this.zoom);
+    let resizeTimer = null;
     window.addEventListener('resize', () => {
-      this.resizeCanvas();
-      this.render();
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => this.resizeCanvas(), 100);
+    });
+  }
+
+  /** Schedules at most one paint per animation frame. */
+  requestRender({ reticle = false } = {}) {
+    this.canvasDirty = true;
+    if (reticle) this.reticleDirty = true;
+    if (this.frameRequested) return;
+    this.frameRequested = true;
+    requestAnimationFrame(() => {
+      this.frameRequested = false;
+      if (this.reticleDirty) { this.reticleDirty = false; this.renderReticleSVG(); }
+      if (this.canvasDirty) { this.canvasDirty = false; this.render(); }
     });
   }
 
@@ -69,26 +119,22 @@ export class ScopeEngine {
     const size = Math.floor(Math.min(rect.width, rect.height));
     if (size <= 0) return;
 
-    this.canvas.width = size;
-    this.canvas.height = size;
+    // Back the canvas with device pixels so edges stay sharp on HiDPI screens (BUG-013);
+    // all drawing code keeps working in CSS pixels via the context transform.
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    this.dpr = dpr;
+    this.canvas.width = Math.round(size * dpr);
+    this.canvas.height = Math.round(size * dpr);
     this.canvasSize = size;
-    // canvasSize just became valid (or changed) — the reticle SVG's viewBox/center
-    // and all coordinates depend on it, so it must be redrawn whenever this changes.
-    // Without this, the reticle can silently never render at all: every early call
-    // to renderReticleSVG() during app init happens while the simulator tab is still
-    // hidden (parent has zero size, so resizeCanvas no-ops above and canvasSize stays
-    // undefined), and nothing else re-triggers it once the tab becomes visible.
+    // The reticle SVG's viewBox/center depend on canvasSize, so it must be redrawn
+    // whenever this changes (the simulator tab can be hidden at init).
     this.renderReticleSVG();
+    this.render();
   }
 
   updateSettings(settings) {
     if (settings.reticle) {
       this.reticleType = settings.reticle;
-      // Every reticle change (settings save, simulator quick-switch, "Select in
-      // Simulator" from Learn) flows through here, but neither <select> ever had
-      // its .value synced to match — they default to showing whichever option is
-      // first in the list (MIL Dot) regardless of what's actually rendering or
-      // saved, which reads as "the wrong reticle got chosen."
       const simSelect = document.getElementById('sim-reticle-select');
       if (simSelect) simSelect.value = settings.reticle;
       const settingsSelect = document.querySelector('select[name="reticle-select"]');
@@ -98,6 +144,17 @@ export class ScopeEngine {
     if (settings.reticleBrightness !== undefined) this.reticleBrightness = settings.reticleBrightness;
     if (settings.zoomSensitivity !== undefined) this.zoomSensitivity = settings.zoomSensitivity;
     if (settings.panSensitivity !== undefined) this.panSensitivity = settings.panSensitivity;
+    if (settings.opticsMode) this.opticsMode = settings.opticsMode === 'realistic' ? 'realistic' : 'arcade';
+    if (settings.screenPxPerMm !== undefined) this.screenPxPerMm = settings.screenPxPerMm > 0 ? settings.screenPxPerMm : null;
+    if (settings.viewingDistanceCm !== undefined && settings.viewingDistanceCm > 0) this.viewingDistanceCm = settings.viewingDistanceCm;
+    if (settings.scopeProfile !== undefined || settings.opticsMode !== undefined) {
+      const key = this.opticsMode === 'realistic' && SCOPE_PROFILES[settings.scopeProfile ?? this.scopeProfile] ? (settings.scopeProfile ?? this.scopeProfile) : 'arcade';
+      this.scopeProfile = settings.scopeProfile ?? this.scopeProfile;
+      const profile = SCOPE_PROFILES[key];
+      this.minZoom = profile.minZoom;
+      this.maxZoom = profile.maxZoom;
+      this.setZoom(this.zoom);
+    }
 
     this.renderReticleSVG();
     this.render();
@@ -109,98 +166,99 @@ export class ScopeEngine {
     this.targetOffsetMILX = scenario.offsetX || 0;
     this.targetOffsetMILY = scenario.offsetY || 0;
     this.environment = scenario.environment || 'field';
+    this.truthOverlay = false;
 
-    // Center view near target
+    // Center view on the target
     this.panX = this.targetOffsetMILX;
     this.panY = this.targetOffsetMILY;
 
+    this.rasterEdge = 0;
     this.prepareTargetOffscreen();
     this.renderReticleSVG();
     this.render();
   }
 
+  /** FEAT-003: after answering, bracket the target's true height and width. */
+  showTruthOverlay(on) {
+    this.truthOverlay = !!on;
+    this.requestRender();
+  }
+
   setZoom(zoomLevel) {
+    // Ignore non-numeric input: a NaN zoom blanked the whole scope (audit BUG-004).
+    if (!Number.isFinite(zoomLevel)) return;
     this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, zoomLevel));
     if (this.hudElement) {
       this.hudElement.textContent = `${this.zoom.toFixed(1)}X MAG`;
     }
     this.updateZoomButtonsUI();
-    this.renderReticleSVG();
-    this.render();
+    this.requestRender({ reticle: true });
   }
 
   updateZoomButtonsUI() {
-    document.querySelectorAll('.btn-zoom-step').forEach(btn => {
+    document.querySelectorAll('#zoom-presets [data-zoom]').forEach(btn => {
       const val = parseFloat(btn.dataset.zoom);
-      if (Math.abs(val - this.zoom) < 0.2) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
+      const active = Math.abs(val - this.zoom) < 0.2;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', String(active));
+      btn.disabled = val < this.minZoom || val > this.maxZoom;
     });
   }
 
   resetView() {
-    this.panX = this.targetOffsetMILX;
-    this.panY = this.targetOffsetMILY;
-    this.render();
-    sfx.playClick();
+    this.centerTarget();
   }
 
   centerTarget() {
     this.panX = this.targetOffsetMILX;
     this.panY = this.targetOffsetMILY;
-    this.render();
+    this.requestRender();
     sfx.playClick();
   }
 
   panByPixels(dxPx, dyPx) {
     // Convert screen pixel delta to MIL delta at current zoom & sensitivity
-    const pixelsPerMIL = this.basePixelsPerMIL * this.zoom;
+    const pixelsPerMIL = this.pxPerMILAt();
     this.panX -= (dxPx / pixelsPerMIL) * this.panSensitivity;
     this.panY += (dyPx / pixelsPerMIL) * this.panSensitivity; // Invert canvas Y axis
-    this.render();
+    this.hideHint();
+    this.requestRender();
+  }
+
+  hideHint() {
+    const hint = document.getElementById('scope-hud-hint');
+    if (hint && !hint.classList.contains('is-dismissed')) hint.classList.add('is-dismissed');
   }
 
   /**
-   * Pre-render high resolution target graphic to offscreen canvas.
-   *
-   * The offscreen canvas is rasterized at the target's true width:height ratio
-   * (not a fixed square) so that render()'s final drawImage — which stretches this
-   * to the real MIL-subtended pixel box — only ever applies ONE aspect-correct
-   * scale. Rasterizing a square image and then non-uniformly stretching it to a
-   * non-square box compounds whatever aspect ratio the shape itself was already
-   * drawn at, which is what made elongated targets (e.g. the S-series) render
-   * visibly squashed/over-elongated.
+   * Rasterizes the target graphic to an offscreen canvas at the target's true
+   * width:height ratio, so render()'s drawImage applies one aspect-correct scale.
+   * `edge` is the long-edge resolution; render() asks for more when zooming in.
    */
-  prepareTargetOffscreen() {
+  prepareTargetOffscreen(edge = 512) {
     if (!this.target) return;
-    const ctx = this.targetOffscreenCanvas.getContext('2d');
-
     const aspect = (this.target.width && this.target.height) ? (this.target.width / this.target.height) : 1;
-    const RES = 400;
-    const offW = aspect >= 1 ? RES : Math.round(RES * aspect);
-    const offH = aspect >= 1 ? Math.round(RES / aspect) : RES;
-    this.targetOffscreenCanvas.width = offW;
-    this.targetOffscreenCanvas.height = offH;
-    this.targetOffscreenSize = { width: offW, height: offH };
-    ctx.clearRect(0, 0, offW, offH);
+    const offW = aspect >= 1 ? edge : Math.max(1, Math.round(edge * aspect));
+    const offH = aspect >= 1 ? Math.max(1, Math.round(edge / aspect)) : edge;
+    this.rasterEdge = edge;
+    const token = ++this.rasterToken;
 
-    // Guard against a stale async load completing after a newer scenario has
-    // already replaced this.target (e.g. rapid "Next Scenario" clicks).
+    // Guard against a stale async load completing after a newer scenario/raster.
     const requestedTarget = this.target;
     const drawAndRender = (img) => {
-      if (this.target !== requestedTarget) return;
+      if (this.target !== requestedTarget || token !== this.rasterToken) return;
+      const off = this.targetOffscreenCanvas;
+      off.width = offW;
+      off.height = offH;
+      const ctx = off.getContext('2d');
       ctx.clearRect(0, 0, offW, offH);
       ctx.drawImage(img, 0, 0, offW, offH);
-      this.render();
+      this.targetOffscreenSize = { width: offW, height: offH };
+      this.requestRender();
     };
 
     const img = new Image();
     if (this.target.imageData && isSafeImageDataURI(this.target.imageData)) {
-      // A real uploaded/drawn image data URI — load it directly. (The SVG-blob
-      // path below only works for actual SVG markup; renderTargetSVGString
-      // returns a bare <img> tag string for this case, which isn't valid SVG.)
       img.onload = () => drawAndRender(img);
       img.src = this.target.imageData;
     } else {
@@ -214,7 +272,7 @@ export class ScopeEngine {
   }
 
   /**
-   * Renders the Scope view canvas layer
+   * Renders the scope canvas layer (background, target, overlays).
    */
   render() {
     if (!this.ctx || !this.canvasSize) return;
@@ -223,126 +281,199 @@ export class ScopeEngine {
     const height = this.canvasSize;
     const centerX = width / 2;
     const centerY = height / 2;
+    const dpr = this.dpr || 1;
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // 1. Draw Environmental Background
+    // 1. Environmental background
     this.renderBackground(width, height);
 
-    // 2. Draw Target in FFP perspective
+    // 2. Target in FFP perspective: size in MIL = size(m) x 1000 / distance(m)
     if (this.target) {
-      // 1 MIL screen pixel size at current magnification
-      const pixelsPerMIL = this.basePixelsPerMIL * this.zoom;
-
-      // Target real angular dimensions in MILs
-      // MIL = Target Size (m) * 1000 / Distance (m)
+      const pixelsPerMIL = this.pxPerMILAt();
       const targetMILHeight = (this.target.height * 1000) / this.distance;
       const targetMILWidth = (this.target.width * 1000) / this.distance;
-
-      // Target size in screen pixels
       const targetPxHeight = targetMILHeight * pixelsPerMIL;
       const targetPxWidth = targetMILWidth * pixelsPerMIL;
 
-      // Target position in screen coordinates relative to center
-      // Reticle center is (centerX, centerY)
-      // Pan offset moves view, so target position shifts inversely
       const relMILX = this.targetOffsetMILX - this.panX;
       const relMILY = this.targetOffsetMILY - this.panY;
-
       const screenTargetX = centerX + relMILX * pixelsPerMIL - targetPxWidth / 2;
       const screenTargetY = centerY - relMILY * pixelsPerMIL - targetPxHeight / 2;
 
-      // Draw target offscreen canvas with smooth image scaling. Source rect uses
-      // the offscreen canvas's own (aspect-correct) size, not a hardcoded square,
-      // so this is a uniform scale to targetPxWidth/targetPxHeight — see
-      // prepareTargetOffscreen() for why that matters.
-      const offSize = this.targetOffscreenSize || { width: this.targetOffscreenCanvas.width, height: this.targetOffscreenCanvas.height };
-      this.ctx.imageSmoothingEnabled = true;
-      this.ctx.imageSmoothingQuality = 'high';
-      this.ctx.drawImage(
-        this.targetOffscreenCanvas,
-        0, 0, offSize.width, offSize.height,
-        screenTargetX, screenTargetY, targetPxWidth, targetPxHeight
-      );
-
-      // Simple target ground shadow
-      this.ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      // Ground shadow first and entirely below the base, so it never darkens the
+      // bottom edge the shooter mills against (audit UI-005).
+      const shadowRy = Math.max(1, targetPxHeight * 0.05);
+      this.ctx.fillStyle = 'rgba(0,0,0,0.28)';
       this.ctx.beginPath();
       this.ctx.ellipse(
         screenTargetX + targetPxWidth / 2,
-        screenTargetY + targetPxHeight + 2,
-        targetPxWidth / 2,
-        targetPxHeight * 0.08,
+        screenTargetY + targetPxHeight + shadowRy + 1,
+        targetPxWidth / 2, shadowRy,
         0, 0, Math.PI * 2
       );
       this.ctx.fill();
+
+      const offSize = this.targetOffscreenSize;
+      if (offSize) {
+        this.ctx.imageSmoothingEnabled = true;
+        this.ctx.imageSmoothingQuality = 'high';
+        this.ctx.drawImage(
+          this.targetOffscreenCanvas,
+          0, 0, offSize.width, offSize.height,
+          screenTargetX, screenTargetY, targetPxWidth, targetPxHeight
+        );
+      }
+
+      // Re-rasterize at a higher resolution once the on-screen size outgrows the
+      // cached raster (procedural targets only; images are used at native size).
+      const neededEdge = Math.max(targetPxWidth, targetPxHeight) * dpr;
+      if (!this.target.imageData && neededEdge > this.rasterEdge * 1.1 && this.rasterEdge < 4096) {
+        const next = Math.min(4096, 2 ** Math.ceil(Math.log2(neededEdge)));
+        if (next > this.rasterEdge) this.prepareTargetOffscreen(next);
+      }
+
+      if (this.truthOverlay) {
+        this.drawTruthBrackets(screenTargetX, screenTargetY, targetPxWidth, targetPxHeight, targetMILWidth, targetMILHeight);
+      }
     }
 
-    // 3. Environmental overlays (Fog / Rain / Mirage)
+    // 3. Environmental overlays (Fog / Rain)
     this.renderWeatherOverlay(width, height);
+  }
+
+  /** Orange dimension brackets with the true MIL values (FEAT-003). */
+  drawTruthBrackets(x, y, w, h, milW, milH) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.strokeStyle = '#ff8c00';
+    ctx.fillStyle = '#ff8c00';
+    ctx.lineWidth = 2;
+    ctx.font = '600 12px "Roboto Mono", monospace';
+    const gap = 8;
+    // Height bracket on the left
+    ctx.beginPath();
+    ctx.moveTo(x - gap - 6, y); ctx.lineTo(x - gap, y); ctx.lineTo(x - gap, y + h); ctx.lineTo(x - gap - 6, y + h);
+    ctx.stroke();
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    this.outlinedText(`${milH.toFixed(2)} MIL`, x - gap - 10, y + h / 2);
+    // Width bracket above
+    ctx.beginPath();
+    ctx.moveTo(x, y - gap - 6); ctx.lineTo(x, y - gap); ctx.lineTo(x + w, y - gap); ctx.lineTo(x + w, y - gap - 6);
+    ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    this.outlinedText(`${milW.toFixed(2)} MIL`, x + w / 2, y - gap - 8);
+    ctx.restore();
+  }
+
+  outlinedText(text, x, y) {
+    const ctx = this.ctx;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+    ctx.strokeText(text, x, y);
+    ctx.fillText(text, x, y);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#ff8c00';
+  }
+
+  /**
+   * The landscape lives in the same angular (MIL) space as the target: panning the
+   * scope shifts the whole view by the same angle and magnification scales it all
+   * together, so the target stays planted on its ground instead of sliding over a
+   * static backdrop (audit UI-008). Scenery is authored in "scene units" where
+   * 18 units = 1 MIL, i.e. its original 1x arcade pixel size.
+   */
+  computeSceneTransform(w, h) {
+    const ppm = this.pxPerMILAt();
+    const k = ppm / 18; // screen px per scene unit
+    const cx = w / 2;
+    const cy = h / 2;
+    let baseMIL = 0; // vertical MIL position of the ground line (the target's base)
+    if (this.target) {
+      const milH = (this.target.height * 1000) / this.distance;
+      baseMIL = this.targetOffsetMILY - milH / 2;
+    }
+    const groundY = cy - (baseMIL - this.panY) * ppm;
+    const panU = this.panX * 18;
+    return {
+      k,
+      groundY,
+      x: (u) => cx + (u - panU) * k,
+      // visible scene-unit range, padded
+      uMin: panU - (cx / k) - 60,
+      uMax: panU + (cx / k) + 60
+    };
   }
 
   renderBackground(w, h) {
     const ctx = this.ctx;
     let grad;
+    const scene = this.scene = this.computeSceneTransform(w, h);
+    // Sky/ground gradient follows the ground line vertically (the sky itself has no
+    // features, so it doesn't need to scale with magnification).
+    const g0 = scene.groundY - h * 0.55;
+    const g1 = scene.groundY + h * 0.45;
 
     switch (this.environment) {
       case 'snow':
-        grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad = ctx.createLinearGradient(0, g0, 0, g1);
         grad.addColorStop(0, '#c4d7e6');
         grad.addColorStop(0.5, '#e8f1f5');
         grad.addColorStop(1, '#a8b9cc');
         break;
 
       case 'desert':
-        grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad = ctx.createLinearGradient(0, g0, 0, g1);
         grad.addColorStop(0, '#e5be90');
         grad.addColorStop(0.5, '#c99e69');
         grad.addColorStop(1, '#8f6838');
         break;
 
       case 'mountain':
-        grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad = ctx.createLinearGradient(0, g0, 0, g1);
         grad.addColorStop(0, '#4a6572');
         grad.addColorStop(0.6, '#344955');
         grad.addColorStop(1, '#1d2731');
         break;
 
       case 'urban':
-        grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad = ctx.createLinearGradient(0, g0, 0, g1);
         grad.addColorStop(0, '#4f5b66');
         grad.addColorStop(0.5, '#353d42');
         grad.addColorStop(1, '#1c2226');
         break;
 
       case 'dusk':
-        grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad = ctx.createLinearGradient(0, g0, 0, g1);
         grad.addColorStop(0, '#4a2545');
         grad.addColorStop(0.4, '#994636');
         grad.addColorStop(1, '#2d1829');
         break;
 
       case 'field':
-        grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad = ctx.createLinearGradient(0, g0, 0, g1);
         grad.addColorStop(0, '#a9c47a');
         grad.addColorStop(0.5, '#7fa350');
         grad.addColorStop(1, '#4c6b2e');
         break;
 
       case 'range':
-        grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad = ctx.createLinearGradient(0, g0, 0, g1);
         grad.addColorStop(0, '#b0ac9c');
         grad.addColorStop(0.5, '#8d8874');
         grad.addColorStop(1, '#5c5847');
         break;
 
       case 'fog':
-        grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad = ctx.createLinearGradient(0, g0, 0, g1);
         grad.addColorStop(0, '#c7cfd2');
         grad.addColorStop(0.5, '#aab4b8');
         grad.addColorStop(1, '#8b969a');
         break;
 
       case 'rain':
-        grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad = ctx.createLinearGradient(0, g0, 0, g1);
         grad.addColorStop(0, '#3d4a56');
         grad.addColorStop(0.5, '#2b3540');
         grad.addColorStop(1, '#171d24');
@@ -350,7 +481,7 @@ export class ScopeEngine {
 
       case 'forest':
       default:
-        grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad = ctx.createLinearGradient(0, g0, 0, g1);
         grad.addColorStop(0, '#668265');
         grad.addColorStop(0.5, '#40523e');
         grad.addColorStop(1, '#233022');
@@ -360,10 +491,10 @@ export class ScopeEngine {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
-    // Draw Horizon line and subtle terrain texture
-    const horizonY = h * 0.55 + (this.panY * this.basePixelsPerMIL * this.zoom * 0.1);
+    // Ground below the ground line, anchored to the target's base.
+    const horizonY = scene.groundY;
     ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.fillRect(0, horizonY, w, h - horizonY);
+    if (horizonY < h) ctx.fillRect(0, Math.max(0, horizonY), w, h - Math.max(0, horizonY));
 
     ctx.strokeStyle = 'rgba(0,0,0,0.2)';
     ctx.lineWidth = 1;
@@ -437,18 +568,30 @@ export class ScopeEngine {
     return x - Math.floor(x);
   }
 
+  /** Indices of repeating scenery items with spacing `spacingU` that are on screen. */
+  visibleIndices(spacingU) {
+    const { uMin, uMax } = this.scene;
+    const first = Math.floor(uMin / spacingU) - 1;
+    const last = Math.ceil(uMax / spacingU) + 1;
+    const out = [];
+    for (let i = first; i <= last && out.length < 4000; i++) out.push(i);
+    return out;
+  }
+
   drawTreeLine(w, horizonY, count, color, alpha, minH, maxH) {
     const ctx = this.ctx;
+    const { k, x } = this.scene;
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
-    const spacing = w / count;
-    for (let i = 0; i < count; i++) {
+    const spacing = 700 / count; // scene units
+    for (const i of this.visibleIndices(spacing)) {
       const seed = this.detailSeed(i, count);
-      const treeH = minH + seed * (maxH - minH);
+      const treeH = (minH + seed * (maxH - minH)) * k;
       const treeW = treeH * 0.5;
-      const cx = spacing * (i + 0.5) + (seed - 0.5) * spacing * 0.5;
-      const baseY = horizonY + 3;
+      const cx = x(spacing * (i + 0.5) + (seed - 0.5) * spacing * 0.5);
+      if (cx + treeW < 0 || cx - treeW > w) continue;
+      const baseY = horizonY + 3 * k;
       // Layered pine silhouette: three stacked tiers + a flat base.
       ctx.beginPath();
       ctx.moveTo(cx, baseY - treeH);
@@ -470,20 +613,20 @@ export class ScopeEngine {
 
   drawRidgeline(w, horizonY, color, alpha, heightFactor, salt) {
     const ctx = this.ctx;
+    const { k, x } = this.scene;
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
-    const peakCount = 6;
-    const maxPeakH = horizonY * heightFactor;
+    const spacing = 700 / 6;
+    const maxPeakH = 385 * heightFactor * k;
+    const idx = this.visibleIndices(spacing);
     ctx.beginPath();
-    ctx.moveTo(0, horizonY);
-    for (let i = 0; i <= peakCount; i++) {
-      const x = (w / peakCount) * i;
+    ctx.moveTo(x(idx[0] * spacing), horizonY);
+    for (const i of idx) {
       const seed = this.detailSeed(i, salt);
-      const y = horizonY - maxPeakH * (0.35 + seed * 0.65);
-      ctx.lineTo(x, y);
+      ctx.lineTo(x(i * spacing), horizonY - maxPeakH * (0.35 + seed * 0.65));
     }
-    ctx.lineTo(w, horizonY);
+    ctx.lineTo(x(idx[idx.length - 1] * spacing), horizonY);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
@@ -491,21 +634,25 @@ export class ScopeEngine {
 
   drawSkyline(w, horizonY) {
     const ctx = this.ctx;
+    const { k, x } = this.scene;
     ctx.save();
-    const count = 12;
-    const spacing = w / count;
-    for (let i = 0; i < count; i++) {
+    const spacing = 700 / 12;
+    for (const i of this.visibleIndices(spacing)) {
       const seed = this.detailSeed(i, 9);
-      const bH = 20 + seed * 55;
-      const bW = spacing * 0.7;
-      const x = spacing * i + spacing * 0.15;
+      const bH = (20 + seed * 55) * k;
+      const bW = spacing * 0.7 * k;
+      const bx = x(spacing * i + spacing * 0.15);
+      if (bx + bW < 0 || bx > w) continue;
       const y = horizonY - bH;
       ctx.fillStyle = '#12161a';
-      ctx.fillRect(x, y, bW, bH + 4);
+      ctx.fillRect(bx, y, bW, bH + 4 * k);
       ctx.fillStyle = 'rgba(255, 200, 120, 0.5)';
-      for (let wy = y + 6; wy < horizonY - 4; wy += 8) {
-        for (let wx = x + 4; wx < x + bW - 4; wx += 7) {
-          if (Math.abs(Math.sin(wx * 12.9 + wy * 78.2)) > 0.55) ctx.fillRect(wx, wy, 2, 3);
+      // Window grid in scene units so it scales with the building.
+      for (let wy = 6; wy < bH / k - 4; wy += 8) {
+        for (let wx = 4; wx < bW / k - 4; wx += 7) {
+          if (Math.abs(Math.sin((i * 97 + wx) * 12.9 + wy * 78.2)) > 0.55) {
+            ctx.fillRect(bx + wx * k, y + wy * k, 2 * k, 3 * k);
+          }
         }
       }
     }
@@ -514,19 +661,22 @@ export class ScopeEngine {
 
   drawFenceLine(w, horizonY) {
     const ctx = this.ctx;
+    const { k, x } = this.scene;
     ctx.save();
     ctx.strokeStyle = 'rgba(40,35,25,0.5)';
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = Math.max(1, 1.5 * k);
     const postSpacing = 22;
-    const postH = 10;
+    const postH = 10 * k;
     ctx.beginPath();
     ctx.moveTo(0, horizonY - postH * 0.6);
     ctx.lineTo(w, horizonY - postH * 0.6);
     ctx.stroke();
-    for (let x = 0; x < w; x += postSpacing) {
+    for (const i of this.visibleIndices(postSpacing)) {
+      const px = x(i * postSpacing);
+      if (px < -5 || px > w + 5) continue;
       ctx.beginPath();
-      ctx.moveTo(x, horizonY - postH);
-      ctx.lineTo(x, horizonY + 2);
+      ctx.moveTo(px, horizonY - postH);
+      ctx.lineTo(px, horizonY + 2 * k);
       ctx.stroke();
     }
     ctx.restore();
@@ -534,25 +684,27 @@ export class ScopeEngine {
 
   drawScrub(w, horizonY) {
     const ctx = this.ctx;
+    const { k, x } = this.scene;
     ctx.save();
     ctx.strokeStyle = 'rgba(70, 55, 30, 0.6)';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = Math.max(1, 2 * k);
     ctx.lineCap = 'round';
-    const count = 8;
-    for (let i = 0; i < count; i++) {
+    const spacing = 700 / 8;
+    for (const i of this.visibleIndices(spacing)) {
       const seed = this.detailSeed(i, 5);
-      const x = (w / count) * i + seed * (w / count);
-      const baseY = horizonY + 4 + seed * 6;
-      const armH = 6 + seed * 6;
+      const sx = x(spacing * i + seed * spacing);
+      const baseY = horizonY + (4 + seed * 6) * k;
+      const armH = (6 + seed * 6) * k;
+      if (sx + armH < 0 || sx - armH > w) continue;
       ctx.beginPath();
-      ctx.moveTo(x, baseY);
-      ctx.lineTo(x, baseY - armH * 1.6);
-      ctx.moveTo(x, baseY - armH * 0.9);
-      ctx.lineTo(x - armH * 0.5, baseY - armH * 0.9);
-      ctx.lineTo(x - armH * 0.5, baseY - armH * 1.4);
-      ctx.moveTo(x, baseY - armH * 1.1);
-      ctx.lineTo(x + armH * 0.5, baseY - armH * 1.1);
-      ctx.lineTo(x + armH * 0.5, baseY - armH * 1.6);
+      ctx.moveTo(sx, baseY);
+      ctx.lineTo(sx, baseY - armH * 1.6);
+      ctx.moveTo(sx, baseY - armH * 0.9);
+      ctx.lineTo(sx - armH * 0.5, baseY - armH * 0.9);
+      ctx.lineTo(sx - armH * 0.5, baseY - armH * 1.4);
+      ctx.moveTo(sx, baseY - armH * 1.1);
+      ctx.lineTo(sx + armH * 0.5, baseY - armH * 1.1);
+      ctx.lineTo(sx + armH * 0.5, baseY - armH * 1.6);
       ctx.stroke();
     }
     ctx.restore();
@@ -560,34 +712,40 @@ export class ScopeEngine {
 
   drawRangeBerm(w, horizonY) {
     const ctx = this.ctx;
+    const { k, x } = this.scene;
     ctx.save();
-    const bermH = 34;
-    const grad = ctx.createLinearGradient(0, horizonY - bermH, 0, horizonY + 6);
+    const bermH = 34 * k;
+    const grad = ctx.createLinearGradient(0, horizonY - bermH, 0, horizonY + 6 * k);
     grad.addColorStop(0, '#8a7f65');
     grad.addColorStop(1, '#5c5340');
     ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.moveTo(0, horizonY + 6);
-    ctx.quadraticCurveTo(w * 0.5, horizonY - bermH, w, horizonY + 6);
-    ctx.lineTo(w, horizonY + 20);
-    ctx.lineTo(0, horizonY + 20);
-    ctx.closePath();
-    ctx.fill();
+    const spacing = 700; // one berm arc per 700 scene units
+    for (const i of this.visibleIndices(spacing)) {
+      const x0 = x(i * spacing - spacing / 2);
+      const x1 = x(i * spacing + spacing / 2);
+      if (x1 < 0 || x0 > w) continue;
+      ctx.beginPath();
+      ctx.moveTo(x0, horizonY + 6 * k);
+      ctx.quadraticCurveTo((x0 + x1) / 2, horizonY - bermH, x1, horizonY + 6 * k);
+      ctx.lineTo(x1, horizonY + 20 * k);
+      ctx.lineTo(x0, horizonY + 20 * k);
+      ctx.closePath();
+      ctx.fill();
+    }
     ctx.restore();
   }
 
   drawSnowfall(w, h) {
+    // Falling snow is near the shooter, so it stays in screen space.
     const ctx = this.ctx;
     ctx.save();
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
     for (let i = 0; i < 40; i++) {
       const seedX = this.detailSeed(i, 1);
       const seedY = this.detailSeed(i, 2);
-      const x = seedX * w;
-      const y = seedY * h;
       const r = 1 + (seedX * seedY) * 1.5;
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.arc(seedX * w, seedY * h, r, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -595,19 +753,22 @@ export class ScopeEngine {
 
   drawSunGlow(w, horizonY) {
     const ctx = this.ctx;
+    const { k, x } = this.scene;
     ctx.save();
-    const sunX = w * 0.72;
-    const sunY = horizonY - 8;
-    const grad = ctx.createRadialGradient(sunX, sunY, 2, sunX, sunY, 70);
+    const sunX = x(152);
+    const sunY = horizonY - 8 * k;
+    const R = 70 * k;
+    if (sunX + R < 0 || sunX - R > w) { ctx.restore(); return; }
+    const grad = ctx.createRadialGradient(sunX, sunY, 2 * k, sunX, sunY, R);
     grad.addColorStop(0, 'rgba(255, 190, 120, 0.9)');
     grad.addColorStop(1, 'rgba(255, 140, 60, 0)');
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(sunX, sunY, 70, 0, Math.PI * 2);
+    ctx.arc(sunX, sunY, R, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = 'rgba(255, 225, 180, 0.95)';
     ctx.beginPath();
-    ctx.arc(sunX, sunY, 10, 0, Math.PI * 2);
+    ctx.arc(sunX, sunY, 10 * k, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }
@@ -640,7 +801,7 @@ export class ScopeEngine {
     const size = this.canvasSize;
     const center = size / 2;
     // Pixels per MIL at current zoom in FFP
-    const pxPerMIL = this.basePixelsPerMIL * this.zoom;
+    const pxPerMIL = this.pxPerMILAt();
 
     const strokeColor = this.reticleColor || '#ff2a2a';
     const brightness = this.reticleBrightness;
@@ -834,10 +995,13 @@ export class ScopeEngine {
     elements.push(this.createHighContrastCircle(center, center, 2.2, color));
 
     // Fine 0.2 MIL tick marks near center (within 3 MILs)
-    for (let sub = 0.2; sub <= 3.0; sub += 0.2) {
+    // Integer loop: accumulating 0.2 in floating point stopped at 2.8 and dropped
+    // the 3.0 MIL tick and label (audit BUG-008).
+    for (let k = 1; k <= 15; k++) {
+      const sub = k / 5;
       const d = sub * pxPerMIL;
-      const isWhole = Math.abs(sub - Math.round(sub)) < 0.05;
-      const isHalf = Math.abs(sub * 10 % 5) < 0.05 && !isWhole;
+      const isWhole = k % 5 === 0;
+      const isHalf = k % 5 !== 0 && (k * 2) % 5 === 0;
       const h = isWhole ? 8 : (isHalf ? 5.5 : 3.0);
       const w = isWhole ? 1.6 : (isHalf ? 1.4 : 1.0);
 
@@ -1060,12 +1224,17 @@ export class ScopeEngine {
       this.isDragging = false;
     });
 
-    // Wheel Zoom
+    // Wheel / trackpad zoom: proportional to scroll distance, so a gentle two-finger
+    // scroll is a small change instead of one 0.5x step per event (audit BUG-012).
     viewport.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const delta = e.deltaY < 0 ? 1 : -1;
-      this.setZoom(this.zoom + delta * 0.5 * this.zoomSensitivity);
-      sfx.playClick();
+      const unit = e.deltaMode === 1 ? 16 : (e.deltaMode === 2 ? 400 : 1); // lines/pages -> px
+      const delta = e.deltaY * unit;
+      const factor = Math.exp(-delta * 0.0025 * this.zoomSensitivity);
+      this.setZoom(this.zoom * factor);
+      this.hideHint();
+      const now = performance.now();
+      if (now - this.lastWheelSoundAt > 150) { this.lastWheelSoundAt = now; sfx.playClick(); }
     }, { passive: false });
 
     // Touch Drag & Pinch Zoom
@@ -1095,12 +1264,13 @@ export class ScopeEngine {
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY
         );
-        const diff = newDist - this.pinchDistance;
-        if (Math.abs(diff) > 5) {
-          const step = diff > 0 ? 0.5 : -0.5;
-          this.setZoom(this.zoom + step * this.zoomSensitivity);
-          this.pinchDistance = newDist;
+        // Proportional pinch: zoom follows the finger spread.
+        if (this.pinchDistance > 0) {
+          const ratio = newDist / this.pinchDistance;
+          this.setZoom(this.zoom * Math.pow(ratio, this.zoomSensitivity));
+          this.hideHint();
         }
+        this.pinchDistance = newDist;
       }
     }, { passive: true });
 
@@ -1108,48 +1278,39 @@ export class ScopeEngine {
       this.isDragging = false;
     });
 
-    // Keyboard navigation
+    // Keyboard navigation. Works while the answer box is focused but still empty, so
+    // auto-focusing it doesn't disable panning (audit BUG-011).
     window.addEventListener('keydown', (e) => {
-      // Only react if simulator tab is active
       const simTab = document.getElementById('page-simulator');
       if (!simTab || !simTab.classList.contains('active')) return;
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = document.activeElement;
+      const tag = el ? el.tagName : '';
+      const isAnswerBox = el && (el.id === 'sim-estimated-distance' || el.id === 'sim-mil-reading');
+      const typing = (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable))
+        && !(isAnswerBox && el.value === '');
+      if (typing) return;
+      if (document.querySelector('.modal.show')) return;
 
       const panAmountPx = 15;
       switch (e.key) {
-        case 'ArrowUp':
-          this.panByPixels(0, panAmountPx);
-          e.preventDefault();
-          break;
-        case 'ArrowDown':
-          this.panByPixels(0, -panAmountPx);
-          e.preventDefault();
-          break;
-        case 'ArrowLeft':
-          this.panByPixels(panAmountPx, 0);
-          e.preventDefault();
-          break;
-        case 'ArrowRight':
-          this.panByPixels(-panAmountPx, 0);
-          e.preventDefault();
-          break;
+        case 'ArrowUp': this.panByPixels(0, panAmountPx); e.preventDefault(); break;
+        case 'ArrowDown': this.panByPixels(0, -panAmountPx); e.preventDefault(); break;
+        case 'ArrowLeft': this.panByPixels(panAmountPx, 0); e.preventDefault(); break;
+        case 'ArrowRight': this.panByPixels(-panAmountPx, 0); e.preventDefault(); break;
         case '+':
         case '=':
-          this.setZoom(this.zoom + 1);
-          e.preventDefault();
-          break;
+          this.setZoom(this.zoom + 1); e.preventDefault(); break;
         case '-':
         case '_':
-          this.setZoom(this.zoom - 1);
-          e.preventDefault();
-          break;
+          this.setZoom(this.zoom - 1); e.preventDefault(); break;
         case 'r':
         case 'R':
-          this.resetView();
+          if (!isAnswerBox) this.resetView();
           break;
         case 'c':
         case 'C':
-          this.centerTarget();
+          if (!isAnswerBox) this.centerTarget();
           break;
       }
     });

@@ -5,6 +5,8 @@
 import { StorageManager } from './storage.js';
 import { renderTargetSVGString, escapeHTML, isSafeImageDataURI } from './utils.js';
 import { TargetDrawingCanvas } from './drawing.js';
+import { LIMITS, newTargetId, planImport, extractImportedTargets, sanitizeTarget } from './target-schema.js';
+import { toast, setFieldError } from './ui.js';
 
 /** Curated svgType shapes a user can pick for a custom (non-image) target. */
 export const CUSTOM_TARGET_SHAPES = [
@@ -39,43 +41,13 @@ export const CUSTOM_TARGET_SHAPES = [
  *  both need the same set (minus 'All', which each renders as its own reset option). */
 export const TARGET_CATEGORIES = ['Swedish Korthåll', 'Swedish Field Shooting', 'Steel', 'IPSC', 'PRS', 'Military', 'Hunting', 'Custom'];
 
-/**
- * Validates and coerces a single object from an imported target JSON file before it
- * ever reaches localStorage or the DOM. Untrusted input: type-check numerics, cap
- * string lengths, and reject any imageData that isn't a genuine image data URI.
- */
-function sanitizeImportedTarget(t) {
-  if (!t || typeof t !== 'object') return null;
+/** Uploaded photos can be many MB; the scope never needs more than this. */
+const MAX_UPLOAD_EDGE_PX = 512;
 
-  const name = typeof t.name === 'string' ? t.name.trim().slice(0, 120) : '';
-  const height = Number(t.height);
-  const width = Number(t.width);
-  if (!name || !Number.isFinite(height) || height <= 0 || !Number.isFinite(width) || width <= 0) {
-    return null;
-  }
-
-  const category = typeof t.category === 'string' && t.category.trim() ? t.category.trim().slice(0, 60) : 'Custom';
-  const description = typeof t.description === 'string' ? t.description.slice(0, 500) : '';
-  const imageData = isSafeImageDataURI(t.imageData) ? t.imageData : '';
-  const svgType = !imageData && typeof t.svgType === 'string' ? t.svgType : (imageData ? undefined : 'swe_b65');
-  const minDistance = Number.isFinite(Number(t.minDistance)) && Number(t.minDistance) > 0 ? Number(t.minDistance) : undefined;
-  const maxDistance = Number.isFinite(Number(t.maxDistance)) && Number(t.maxDistance) > 0 ? Number(t.maxDistance) : undefined;
-
-  return {
-    // Restrict ids to a safe charset: they end up in HTML attributes and DOM lookups.
-    id: typeof t.id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(t.id) ? t.id : 'custom_' + Date.now() + Math.random().toString(36).slice(2, 6),
-    name,
-    category,
-    height,
-    width,
-    description,
-    isBuiltIn: false,
-    type: imageData ? 'image' : 'svg_shape',
-    svgType,
-    imageData,
-    minDistance,
-    maxDistance
-  };
+function storageErrorMessage(result) {
+  return result && result.quotaExceeded
+    ? 'Browser storage is full. Delete some custom targets or use smaller images, then try again.'
+    : 'Could not save to browser storage.';
 }
 
 export class TargetsController {
@@ -86,6 +58,10 @@ export class TargetsController {
     this.allTargets = [];
     this.activeCategory = 'All';
     this.drawCanvas = null;
+    // True once the user has drawn, uploaded, cleared or undone in the editor.
+    // Until then the canvas only shows the preset shape, which is saved as a
+    // vector svgType rather than a raster PNG (audit BUG-015).
+    this.drawingEdited = false;
   }
 
   async init() {
@@ -115,9 +91,7 @@ export class TargetsController {
       `<option value="${s.value}">${escapeHTML(s.label)}</option>`
     ).join('');
 
-    // Picking a shape copies it onto the drawing canvas as a starting point you
-    // can then edit — it previously had no effect at all beyond a static preview,
-    // which read as "the dropdown doesn't do anything."
+    // Picking a shape resets the canvas to that preset (undoable).
     select.addEventListener('change', () => this.copyShapeToDrawingCanvas());
     ['target-height', 'target-width'].forEach(id => {
       const el = document.getElementById(id);
@@ -147,11 +121,9 @@ export class TargetsController {
   }
 
   /**
-   * Rasterizes the currently selected preset shape (using the current height/width
-   * fields) and stamps it onto the drawing canvas, so the user can hand-edit it
-   * from there instead of only ever seeing a disconnected static preview. Also
-   * used by openTargetModal() to seed the canvas when editing/cloning a target
-   * that has a procedural shape but no saved drawing/image.
+   * Rasterizes the selected preset shape onto the drawing canvas as an editable
+   * starting point. This alone does not count as an edit: until the user draws on
+   * it, the target is saved as the vector preset.
    */
   copyShapeToDrawingCanvas() {
     if (!this.drawCanvas) return;
@@ -168,7 +140,10 @@ export class TargetsController {
     const url = URL.createObjectURL(blob);
     const img = new Image();
     img.onload = () => {
+      this.drawingEdited = false;
+      document.getElementById('target-image-data').value = '';
       this.drawCanvas.stampImage(img);
+      this.updateShapePreview();
       URL.revokeObjectURL(url);
     };
     img.onerror = () => URL.revokeObjectURL(url);
@@ -176,7 +151,15 @@ export class TargetsController {
   }
 
   refreshTargets() {
-    this.customTargets = StorageManager.getCustomTargets();
+    const builtInIds = new Set(this.builtInTargets.map(t => t.id));
+    let customs = StorageManager.getCustomTargets();
+    // Older versions could import custom copies that reuse a built-in id (BUG-006);
+    // give those a fresh id so lookups, edits and deletes hit the right record.
+    if (customs.some(t => builtInIds.has(t.id))) {
+      customs = customs.map(t => builtInIds.has(t.id) ? { ...t, id: newTargetId() } : t);
+      StorageManager.saveCustomTargets(customs);
+    }
+    this.customTargets = customs;
     this.allTargets = [...this.builtInTargets, ...this.customTargets];
   }
 
@@ -194,8 +177,8 @@ export class TargetsController {
 
     const categories = ['All', ...TARGET_CATEGORIES];
     container.innerHTML = categories.map(cat => `
-      <button class="btn btn-sm ${this.activeCategory === cat ? 'btn-tactical-primary' : 'btn-tactical-secondary'} me-1 mb-2" data-category="${cat}">
-        ${cat}
+      <button type="button" class="btn btn-sm ${this.activeCategory === cat ? 'btn-tactical-primary' : 'btn-tactical-secondary'} me-1 mb-2" data-category="${escapeHTML(cat)}" aria-pressed="${this.activeCategory === cat}">
+        ${escapeHTML(cat)}
       </button>
     `).join('');
 
@@ -224,7 +207,7 @@ export class TargetsController {
     if (this.loadError && this.allTargets.length === 0) {
       grid.innerHTML = `
         <div class="col-12 text-center py-5 text-warning">
-          <i class="bi bi-exclamation-triangle fs-1 d-block mb-3"></i>
+          <i class="bi bi-exclamation-triangle fs-1 d-block mb-3" aria-hidden="true"></i>
           <p>The built-in target library failed to load.</p>
           <p class="text-muted small">This app uses <code>fetch()</code> to load target data, which requires an HTTP(S) origin.
           If you opened this file directly (<code>file://</code>), please serve it via a local HTTP server instead (see README).</p>
@@ -236,7 +219,7 @@ export class TargetsController {
     if (filtered.length === 0) {
       grid.innerHTML = `
         <div class="col-12 text-center py-5 text-muted">
-          <i class="bi bi-bullseye fs-1 d-block mb-3"></i>
+          <i class="bi bi-bullseye fs-1 d-block mb-3" aria-hidden="true"></i>
           <p>No targets found in category "${escapeHTML(this.activeCategory)}".</p>
         </div>
       `;
@@ -248,10 +231,10 @@ export class TargetsController {
       const widthMm = Math.round(t.width * 1000);
       const isCustom = !t.isBuiltIn;
       const distRangeStr = (t.minDistance && t.maxDistance) ? `${t.minDistance} - ${t.maxDistance} m` : 'Variable';
+      const safeId = escapeHTML(t.id);
+      const safeName = escapeHTML(t.name);
 
-      // Letterbox the preview to the target's true width:height ratio instead of
-      // forcing it into a square — a square box would stretch/distort elongated
-      // targets (e.g. the S-series) away from their real proportions.
+      // Letterbox the preview to the target's true width:height ratio.
       const previewAspect = (t.width && t.height) ? (t.width / t.height) : 1;
       const previewW = previewAspect >= 1 ? 130 : Math.round(130 * previewAspect);
       const previewH = previewAspect >= 1 ? Math.round(130 / previewAspect) : 130;
@@ -259,16 +242,16 @@ export class TargetsController {
       return `
         <div class="col-12 col-sm-6 col-md-4 col-lg-3 mb-4">
           <div class="target-card">
-            <div class="target-preview-box">
+            <div class="target-preview-box" role="img" aria-label="${safeName} outline">
               ${renderTargetSVGString(t, previewW, previewH)}
               <span class="position-absolute top-0 start-0 m-2 badge ${isCustom ? 'badge-tan' : 'badge-olive'}">
                 ${escapeHTML(t.category)}
               </span>
             </div>
             <div class="target-card-body">
-              <h5 class="tactical-font text-tan-light mb-1" style="font-size:1.05rem;">${escapeHTML(t.name)}</h5>
+              <h5 class="tactical-font text-tan-light mb-1" style="font-size:1.05rem;">${safeName}</h5>
               <p class="text-muted small mb-2" style="font-size:0.8rem; line-height:1.3;">${escapeHTML(t.description || '')}</p>
-              
+
               <div class="target-specs mb-3">
                 <div class="d-flex justify-content-between">
                   <span>DIMENSIONS:</span> <strong class="text-orange-highlight">${widthMm}x${heightMm} mm</strong>
@@ -279,19 +262,19 @@ export class TargetsController {
               </div>
 
               <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-tactical-outline flex-grow-1 btn-practice-target" data-target-id="${escapeHTML(t.id)}">
+                <button type="button" class="btn btn-sm btn-tactical-outline flex-grow-1 btn-practice-target" data-target-id="${safeId}">
                   Practice Scenario
                 </button>
                 ${isCustom ? `
-                  <button class="btn btn-sm btn-tactical-secondary btn-edit-target" data-target-id="${escapeHTML(t.id)}">
-                    ✏️
+                  <button type="button" class="btn btn-sm btn-tactical-secondary btn-edit-target" data-target-id="${safeId}" aria-label="Edit ${safeName}" title="Edit">
+                    <span aria-hidden="true">✏️</span>
                   </button>
-                  <button class="btn btn-sm btn-outline-danger btn-delete-target" data-target-id="${escapeHTML(t.id)}">
-                    🗑️
+                  <button type="button" class="btn btn-sm btn-outline-danger btn-delete-target" data-target-id="${safeId}" aria-label="Delete ${safeName}" title="Delete">
+                    <span aria-hidden="true">🗑️</span>
                   </button>
                 ` : `
-                  <button class="btn btn-sm btn-tactical-secondary btn-duplicate-target" data-target-id="${escapeHTML(t.id)}" title="Duplicate as Custom">
-                    📋
+                  <button type="button" class="btn btn-sm btn-tactical-secondary btn-duplicate-target" data-target-id="${safeId}" aria-label="Duplicate ${safeName} as a custom target" title="Duplicate as Custom">
+                    <span aria-hidden="true">📋</span>
                   </button>
                 `}
               </div>
@@ -301,13 +284,11 @@ export class TargetsController {
       `;
     }).join('');
 
-    // Bind item buttons
     grid.querySelectorAll('.btn-practice-target').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const id = e.currentTarget.dataset.targetId;
-        const target = this.getTargetById(id);
+        const target = this.getTargetById(e.currentTarget.dataset.targetId);
         if (!target) {
-          alert('That target could not be found. It may have been deleted.');
+          toast('That target could not be found. It may have been deleted.', 'warning');
           return;
         }
         if (this.app && this.app.startScenarioWithTarget) {
@@ -318,24 +299,20 @@ export class TargetsController {
     });
 
     grid.querySelectorAll('.btn-duplicate-target').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = e.currentTarget.dataset.targetId;
-        this.duplicateTarget(id);
-      });
+      btn.addEventListener('click', (e) => this.duplicateTarget(e.currentTarget.dataset.targetId));
     });
 
     grid.querySelectorAll('.btn-edit-target').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const id = e.currentTarget.dataset.targetId;
-        this.openTargetModal(id);
-      });
+      btn.addEventListener('click', (e) => this.openTargetModal(e.currentTarget.dataset.targetId));
     });
 
     grid.querySelectorAll('.btn-delete-target').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const id = e.currentTarget.dataset.targetId;
-        if (confirm('Delete this custom target?')) {
-          StorageManager.deleteCustomTarget(id);
+        const t = this.getTargetById(id);
+        if (confirm(`Delete the custom target "${t ? t.name : id}"?`)) {
+          const result = StorageManager.deleteCustomTarget(id);
+          if (!result.ok) toast(storageErrorMessage(result), 'error');
           this.refreshTargets();
           this.renderTargetGrid();
         }
@@ -347,30 +324,88 @@ export class TargetsController {
     const source = this.getTargetById(targetId);
     if (!source) return;
 
-    const copy = {
+    const copy = sanitizeTarget({
       ...source,
-      id: 'custom_' + Date.now(),
+      id: newTargetId(),
       name: `${source.name} (Copy)`,
-      isBuiltIn: false,
       category: 'Custom'
-    };
+    });
+    if (!copy) return;
 
-    StorageManager.saveCustomTarget(copy);
+    const result = StorageManager.saveCustomTarget(copy);
+    if (!result.ok) {
+      toast(storageErrorMessage(result), 'error');
+      return;
+    }
     this.refreshTargets();
     this.renderTargetGrid();
-    // Open the copy for editing immediately rather than leaving the user to find
-    // and click its Edit button — cloning is usually the first step of "duplicate
-    // this, then customize/draw over it," not an end in itself.
+    // Open the copy for editing immediately — cloning is usually the first step of
+    // "duplicate this, then customize it".
     this.openTargetModal(copy.id);
+  }
+
+  /** Exports only the user's custom targets — built-ins ship with the app. */
+  exportCustomTargets() {
+    if (this.customTargets.length === 0) {
+      toast('You have no custom targets to export yet.', 'info');
+      return;
+    }
+    const blob = new Blob([JSON.stringify(this.customTargets, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'rret_custom_targets.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  importTargetsFromText(text) {
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (err) {
+      toast('That file is not valid JSON.', 'error');
+      return;
+    }
+    const imported = extractImportedTargets(parsed);
+    if (!imported) {
+      toast('Unrecognised file: expected a list of targets.', 'error');
+      return;
+    }
+
+    const { list, counts } = planImport(imported, {
+      builtInIds: this.builtInTargets.map(t => t.id),
+      existingCustom: this.customTargets
+    });
+
+    if (counts.added + counts.updated === 0) {
+      toast(`No new custom targets found${counts.skippedBuiltIn ? ` (${counts.skippedBuiltIn} built-in targets skipped)` : ''}.`, 'warning');
+      return;
+    }
+
+    // One write for the whole import: either everything lands or nothing does.
+    const result = StorageManager.saveCustomTargets(list);
+    if (!result.ok) {
+      toast(`Import failed, nothing was changed. ${storageErrorMessage(result)}`, 'error', 8000);
+      return;
+    }
+    this.refreshTargets();
+    this.renderTargetGrid();
+
+    const parts = [`${counts.added} added`];
+    if (counts.updated) parts.push(`${counts.updated} updated`);
+    if (counts.skippedBuiltIn) parts.push(`${counts.skippedBuiltIn} built-in skipped`);
+    if (counts.invalid) parts.push(`${counts.invalid} invalid`);
+    if (counts.imageTooLarge) parts.push(`${counts.imageTooLarge} with oversized images skipped`);
+    if (counts.overLimit) parts.push(`${counts.overLimit} over the ${LIMITS.importItems}-target limit`);
+    toast(`Import complete: ${parts.join(', ')}.`, 'success', 7000);
   }
 
   bindEvents() {
     const btnNewTarget = document.getElementById('btn-new-target');
-    if (btnNewTarget) {
-      btnNewTarget.addEventListener('click', () => {
-        this.openTargetModal();
-      });
-    }
+    if (btnNewTarget) btnNewTarget.addEventListener('click', () => this.openTargetModal());
 
     const form = document.getElementById('target-form');
     if (form) {
@@ -380,77 +415,56 @@ export class TargetsController {
       });
     }
 
-    // Image Upload Preview Handler
+    // Image upload: downscale, then place it on the drawing canvas so drawing and
+    // uploading compose instead of silently replacing each other (BUG-023).
     const imageInput = document.getElementById('target-image-file');
     if (imageInput) {
       imageInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (evt) => {
-            const dataUri = evt.target.result;
-            if (!isSafeImageDataURI(dataUri)) {
-              alert('That file could not be read as a valid image.');
-              return;
-            }
-            document.getElementById('target-image-data').value = dataUri;
-            const preview = document.getElementById('target-modal-preview');
-            if (preview) {
-              preview.innerHTML = `<img src="${dataUri}" style="max-height:100px; max-width:100%; border-radius:6px;"/>`;
-            }
-          };
-          reader.readAsDataURL(file);
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+          setFieldError(imageInput, 'Please choose an image file.');
+          return;
         }
+        setFieldError(imageInput, '');
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          // Downscale very large photos before they reach the canvas/storage.
+          const scale = Math.min(1, MAX_UPLOAD_EDGE_PX / Math.max(img.naturalWidth, img.naturalHeight));
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(img.naturalWidth * scale));
+          c.height = Math.max(1, Math.round(img.naturalHeight * scale));
+          c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+          this.drawingEdited = true;
+          this.drawCanvas.stampImage(c); // fires onChange -> syncs target-image-data
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          setFieldError(imageInput, 'That file could not be read as an image.');
+        };
+        img.src = url;
       });
     }
 
-    // Export JSON
     const btnExport = document.getElementById('btn-export-targets');
-    if (btnExport) {
-      btnExport.addEventListener('click', () => {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(this.allTargets, null, 2));
-        const downloadAnchor = document.createElement('a');
-        downloadAnchor.setAttribute("href", dataStr);
-        downloadAnchor.setAttribute("download", "rret_target_library.json");
-        document.body.appendChild(downloadAnchor);
-        downloadAnchor.click();
-        downloadAnchor.remove();
-      });
-    }
+    if (btnExport) btnExport.addEventListener('click', () => this.exportCustomTargets());
 
-    // Import JSON
     const btnImport = document.getElementById('btn-import-targets-file');
     if (btnImport) {
       btnImport.addEventListener('change', (e) => {
         const file = e.target.files[0];
-        if (file) {
-          const reader = new FileReader();
-          reader.onload = (evt) => {
-            try {
-              const imported = JSON.parse(evt.target.result);
-              if (Array.isArray(imported)) {
-                let importedCount = 0;
-                imported.forEach(t => {
-                  const sanitized = sanitizeImportedTarget(t);
-                  if (sanitized) {
-                    StorageManager.saveCustomTarget(sanitized);
-                    importedCount++;
-                  }
-                });
-                this.refreshTargets();
-                this.renderTargetGrid();
-                alert(importedCount > 0
-                  ? `Successfully imported ${importedCount} target(s).`
-                  : 'No valid targets were found in that file.');
-              } else {
-                alert('Invalid JSON file format: expected an array of targets.');
-              }
-            } catch (err) {
-              alert('Invalid JSON file format.');
-            }
-          };
-          reader.readAsText(file);
+        e.target.value = ''; // allow re-importing the same file
+        if (!file) return;
+        if (file.size > LIMITS.importFileBytes) {
+          toast(`That file is too large (max ${Math.round(LIMITS.importFileBytes / 1024 / 1024)} MB).`, 'error');
+          return;
         }
+        const reader = new FileReader();
+        reader.onload = (evt) => this.importTargetsFromText(evt.target.result);
+        reader.onerror = () => toast('Could not read that file.', 'error');
+        reader.readAsText(file);
       });
     }
   }
@@ -461,64 +475,54 @@ export class TargetsController {
     if (!canvasEl) return;
 
     this.drawCanvas = new TargetDrawingCanvas(canvasEl);
+    this.drawCanvas.onUserEdit = () => { this.drawingEdited = true; };
 
-    // Every committed stroke/shape syncs the hidden imageData field directly —
-    // no separate "apply drawing" step. A near-blank canvas (nothing drawn yet,
-    // or just cleared) must NOT overwrite imageData, or opening the modal would
-    // silently blank out an existing preset-shape target.
+    // Every committed user stroke syncs the hidden imageData field directly. Programmatic
+    // stamps of the preset shape don't, so an untouched preset stays a vector shape.
     this.drawCanvas.onChange = () => {
       const hiddenField = document.getElementById('target-image-data');
-      if (!hiddenField) return;
+      if (!hiddenField || !this.drawingEdited) return;
       if (this.drawCanvas.hasContent()) {
         hiddenField.value = this.drawCanvas.toDataURL();
+        const preview = document.getElementById('target-modal-preview');
+        if (preview) preview.innerHTML = '<span class="text-muted small">Using your drawing / image from the canvas above.</span>';
       } else {
         hiddenField.value = '';
-        // Nothing drawn (anymore) — fall back to showing the selected preset shape.
         this.updateShapePreview();
       }
     };
 
     document.querySelectorAll('.btn-draw-tool').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        document.querySelectorAll('.btn-draw-tool').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.btn-draw-tool').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
         e.currentTarget.classList.add('active');
+        e.currentTarget.setAttribute('aria-pressed', 'true');
         this.drawCanvas.setTool(e.currentTarget.dataset.tool);
       });
     });
 
     const colorInput = document.getElementById('draw-color');
-    if (colorInput) {
-      colorInput.addEventListener('input', (e) => this.drawCanvas.setColor(e.target.value));
-    }
+    if (colorInput) colorInput.addEventListener('input', (e) => this.drawCanvas.setColor(e.target.value));
 
     const widthSelect = document.getElementById('draw-stroke-width');
-    if (widthSelect) {
-      widthSelect.addEventListener('change', (e) => this.drawCanvas.setStrokeWidth(parseFloat(e.target.value)));
-    }
+    if (widthSelect) widthSelect.addEventListener('change', (e) => this.drawCanvas.setStrokeWidth(parseFloat(e.target.value)));
 
     const undoBtn = document.getElementById('btn-undo-drawing');
-    if (undoBtn) undoBtn.addEventListener('click', () => this.drawCanvas.undo());
+    if (undoBtn) undoBtn.addEventListener('click', () => { this.drawingEdited = true; this.drawCanvas.undo(); });
 
     const clearBtn = document.getElementById('btn-clear-drawing');
-    if (clearBtn) {
-      // clear()'s onChange callback already syncs target-image-data.
-      clearBtn.addEventListener('click', () => this.drawCanvas.clear());
-    }
+    if (clearBtn) clearBtn.addEventListener('click', () => { this.drawingEdited = true; this.drawCanvas.clear(); });
   }
 
   /**
-   * Resets the drawing toolbar to its default tool, and — critically — re-syncs
-   * drawCanvas's color/stroke-width state from the (just form.reset()'d) color
-   * and stroke-width inputs. Without this, form.reset() visually puts the color
-   * swatch back to its default, but form.reset() never fires an input/change
-   * event, so drawCanvas.color silently kept whatever was last picked in a
-   * previous modal session — the swatch would show one color while strokes
-   * actually drew in a different, stale one. Called each time the modal opens.
+   * Resets the drawing toolbar to its default tool and re-syncs drawCanvas's
+   * colour/stroke state from the (just form.reset()'d) inputs — form.reset() fires
+   * no input/change events, so without this the swatch and the pen could disagree.
    */
   resetDrawingToolUI() {
-    document.querySelectorAll('.btn-draw-tool').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.btn-draw-tool').forEach(b => { b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
     const penBtn = document.querySelector('.btn-draw-tool[data-tool="pen"]');
-    if (penBtn) penBtn.classList.add('active');
+    if (penBtn) { penBtn.classList.add('active'); penBtn.setAttribute('aria-pressed', 'true'); }
     if (!this.drawCanvas) return;
 
     this.drawCanvas.setTool('pen');
@@ -532,14 +536,13 @@ export class TargetsController {
     const modalEl = document.getElementById('target-modal');
     if (!modalEl) return;
 
-    // getOrCreateInstance (not `new Modal()`) reuses the existing instance if one
-    // is already attached to this element — repeatedly constructing new instances
-    // across many opens can stack up backdrops/listeners and make the modal's own
-    // content stop responding to clicks.
+    // getOrCreateInstance reuses the existing instance instead of stacking new ones.
     const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
     const form = document.getElementById('target-form');
     form.reset();
+    form.querySelectorAll('[aria-invalid]').forEach(el => setFieldError(el, ''));
     document.getElementById('target-image-data').value = '';
+    this.drawingEdited = false;
     const preview = document.getElementById('target-modal-preview');
     if (preview) preview.innerHTML = '<span class="text-muted small">No custom image loaded</span>';
     this.resetDrawingToolUI();
@@ -549,7 +552,7 @@ export class TargetsController {
     if (targetId) {
       const t = this.getTargetById(targetId);
       if (!t) {
-        alert('That target could not be found. It may have been deleted.');
+        toast('That target could not be found. It may have been deleted.', 'warning');
         return;
       }
       document.getElementById('target-id').value = t.id;
@@ -561,23 +564,20 @@ export class TargetsController {
       document.getElementById('target-max-distance').value = t.maxDistance || '';
       document.getElementById('target-description').value = t.description || '';
       if (shapeSelect) shapeSelect.value = t.svgType || 'swe_b65';
+      this.editingColors = { color: t.color, borderColor: t.borderColor };
       if (t.imageData && isSafeImageDataURI(t.imageData)) {
         document.getElementById('target-image-data').value = t.imageData;
-        if (preview) preview.innerHTML = `<img src="${t.imageData}" style="max-height:100px; max-width:100%; border-radius:6px;"/>`;
-        // Load the existing image/drawing into the canvas so it can be continued,
-        // not just silently discarded and redrawn from a blank canvas.
+        if (preview) preview.innerHTML = `<img src="${t.imageData}" alt="" style="max-height:100px; max-width:100%; border-radius:6px;"/>`;
+        // Load the existing image so editing continues from it.
         if (this.drawCanvas) this.drawCanvas.loadFromDataURL(t.imageData).catch(() => {});
       } else if (this.drawCanvas) {
-        // No saved image/drawing (a procedural preset-shape target, e.g. a clone
-        // of a built-in target) — seed the canvas with that shape instead of
-        // leaving it blank, so cloning/editing has something to actually draw
-        // on. shapeSelect.value and the height/width fields are already set
-        // above, so this reads the same values just assigned to the form.
+        // Procedural preset target: seed the canvas with its shape as a starting point.
         this.drawCanvas.undoStack = [];
         this.copyShapeToDrawingCanvas();
       }
     } else {
-      document.getElementById('target-id').value = 'custom_' + Date.now();
+      this.editingColors = {};
+      document.getElementById('target-id').value = newTargetId();
       if (shapeSelect) shapeSelect.value = 'swe_b65';
       if (this.drawCanvas) {
         this.drawCanvas.undoStack = [];
@@ -590,55 +590,54 @@ export class TargetsController {
   }
 
   saveTargetFromModal() {
-    const id = document.getElementById('target-id').value;
-    const name = document.getElementById('target-name').value.trim().slice(0, 120);
-    const category = document.getElementById('target-category').value.trim().slice(0, 60);
-    const height = parseFloat(document.getElementById('target-height').value);
-    const width = parseFloat(document.getElementById('target-width').value);
-    const description = document.getElementById('target-description').value.trim().slice(0, 500);
-    const imageDataRaw = document.getElementById('target-image-data').value;
-    const imageData = isSafeImageDataURI(imageDataRaw) ? imageDataRaw : '';
-    const shapeSelect = document.getElementById('target-shape');
-    const svgType = shapeSelect ? shapeSelect.value : 'swe_b65';
+    const nameEl = document.getElementById('target-name');
+    const heightEl = document.getElementById('target-height');
+    const widthEl = document.getElementById('target-width');
+    const height = parseFloat(heightEl.value);
+    const width = parseFloat(widthEl.value);
 
-    if (!name || isNaN(height) || height <= 0 || isNaN(width) || width <= 0) {
-      alert('Please fill out valid target dimensions.');
+    let valid = true;
+    setFieldError(nameEl, nameEl.value.trim() ? '' : 'Give the target a name.');
+    if (!nameEl.value.trim()) valid = false;
+    setFieldError(heightEl, height > 0 ? '' : 'Enter a height in meters greater than 0.');
+    if (!(height > 0)) valid = false;
+    setFieldError(widthEl, width > 0 ? '' : 'Enter a width in meters greater than 0.');
+    if (!(width > 0)) valid = false;
+    if (!valid) return;
+
+    const imageDataRaw = document.getElementById('target-image-data').value;
+    const shapeSelect = document.getElementById('target-shape');
+
+    const targetObj = sanitizeTarget({
+      id: document.getElementById('target-id').value,
+      name: nameEl.value,
+      category: document.getElementById('target-category').value,
+      height,
+      width,
+      description: document.getElementById('target-description').value.trim(),
+      svgType: shapeSelect ? shapeSelect.value : 'swe_b65',
+      imageData: imageDataRaw,
+      // A custom image always takes rendering priority; colours only matter for presets.
+      ...(this.editingColors || {}),
+      minDistance: document.getElementById('target-min-distance').value,
+      maxDistance: document.getElementById('target-max-distance').value
+    });
+    if (!targetObj) return;
+    if (imageDataRaw && !targetObj.imageData) {
+      toast('That image is too large to store. Try a smaller or simpler image.', 'error', 7000);
       return;
     }
 
-    // Both optional; only kept if they form a valid, positive, min <= max range.
-    let minDistance = parseFloat(document.getElementById('target-min-distance').value);
-    let maxDistance = parseFloat(document.getElementById('target-max-distance').value);
-    const hasValidRange = Number.isFinite(minDistance) && Number.isFinite(maxDistance)
-      && minDistance > 0 && maxDistance > 0 && minDistance <= maxDistance;
-    if (!hasValidRange) {
-      minDistance = undefined;
-      maxDistance = undefined;
+    const result = StorageManager.saveCustomTarget(targetObj);
+    if (!result.ok) {
+      toast(storageErrorMessage(result), 'error', 8000);
+      return; // keep the modal open so nothing the user entered is lost
     }
-
-    const targetObj = {
-      id,
-      name,
-      category: category || 'Custom',
-      height,
-      width,
-      description,
-      isBuiltIn: false,
-      type: imageData ? 'image' : 'svg_shape',
-      // A custom image always takes rendering priority (see renderTargetSVGString),
-      // so the shape is only relevant when no image was uploaded.
-      svgType: imageData ? undefined : svgType,
-      imageData,
-      minDistance,
-      maxDistance
-    };
-
-    StorageManager.saveCustomTarget(targetObj);
     this.refreshTargets();
     this.renderTargetGrid();
+    toast(`Saved "${targetObj.name}".`, 'success');
 
-    const modalEl = document.getElementById('target-modal');
-    const modal = bootstrap.Modal.getInstance(modalEl);
+    const modal = bootstrap.Modal.getInstance(document.getElementById('target-modal'));
     if (modal) modal.hide();
   }
 }

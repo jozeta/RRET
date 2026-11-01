@@ -166,9 +166,8 @@ export class TutorialController {
     container.querySelectorAll('.btn-preview-select').forEach(btn => {
       btn.addEventListener('click', (e) => {
         const reticleId = e.currentTarget.dataset.reticle;
-        if (this.app && this.app.scope) {
-          // updateSettings() itself keeps #sim-reticle-select in sync now.
-          this.app.scope.updateSettings({ reticle: reticleId });
+        if (this.app && this.app.setReticle) {
+          this.app.setReticle(reticleId);
           this.app.navigateTo('simulator');
         }
       });
