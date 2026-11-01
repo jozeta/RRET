@@ -11,7 +11,7 @@
   "scripts": {
     "serve": "python3 scripts/dev_server.py 8085",
     "check": "for f in js/*.js sw.js tests/*.mjs tests/browser/*.mjs; do node --check \"$f\" || exit 1; done",
-    "test": "node --test tests/",
+    "test": "node --test \"tests/*.test.mjs\"",
     "test:browser": "node tests/browser/smoke.mjs",
     "test:all": "npm run check && npm test && npm run test:browser"
   }
