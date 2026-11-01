@@ -367,3 +367,15 @@ main.container-fluid { padding-top: 1.75rem !important; }
 #reticle-help-modal .h6 { color: var(--ink); font-weight: 650; margin-bottom: 0.6rem; }
 .reticle-preview-svg { background: none !important; border: 0 !important; padding: 0 !important; height: auto !important; }
 .reticle-preview-svg svg { display: block; border-radius: var(--radius-m); }
+
+/* ---- Field-condition switches ------------------------------------------ */
+.realism-options legend { float: none; width: auto; font-size: 0.85rem; }
+.realism-chip {
+  display: inline-flex; align-items: center; gap: 0.4rem;
+  padding: 0.3rem 0.75rem; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line-strong); color: var(--ink-2); font-size: 0.85rem; user-select: none;
+}
+.realism-chip input { accent-color: var(--brass); margin: 0; }
+.realism-chip.active { border-color: var(--brass); color: var(--ink); background: var(--brass-soft); }
+.realism-chip:focus-within { outline: 2px solid var(--brass); outline-offset: 2px; }
+.shared-set-banner { background: var(--brass-soft); color: var(--ink); border-radius: var(--radius-m); padding: 0.55rem 0.8rem; }

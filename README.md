@@ -27,6 +27,8 @@
 - **Free practice**: One target at a time, with a full calculation breakdown after each answer (height and width, in your units) and orange brackets showing the target's true MIL size. Stuck? **Show solution** reveals the answer and the working without scoring the round.
 - **Coach mode**: Optionally enter the MIL value you read as well. The result then separates *reading error* (how far off your reticle reading was) from *maths error* (whether your arithmetic matched your own reading).
 - **Station mode (fältskytte)**: A timed station of 3–6 figures from one series, with no feedback until the station is done. Distances come from each figure's competition window.
+- **Field conditions**: switch on mirage, hold sway, grass cover, finding the target and low light, separately.
+- **Club sessions**: share a link so everyone practises the identical set of targets and conditions.
 - **Printable range card (lathund)**: For any series, a MIL-reading → distance table per figure, ready to print.
 
 ### 3. Comprehensive Target Library (86 Built-in Targets)

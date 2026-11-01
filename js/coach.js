@@ -43,19 +43,26 @@ export function diagnoseEstimate(scenario, userMil, estimateMeters) {
 }
 
 /**
- * Turns the two signed error percentages into one short coaching message shown
- * under the result, e.g. "Reading was good — check your arithmetic."
- *
- * Return a string, or null to show only the raw numbers.
- *
- * TODO(you): decide the thresholds and wording. Things to weigh:
- *  - Reading error is a reticle skill: ±0.1 MIL on a 1 MIL target is already 10%,
- *    so a "good" reading threshold probably needs to be looser than for maths.
- *  - Maths error should be ~0% with a calculator; anything over ~1% is a slip.
- *  - Sign matters for reading: positive = read the target too big (answer too
- *    close), negative = too small (answer too far). Is that worth saying?
- *  - Both can be wrong at once; which one should the message lead with?
+ * One short coaching message from the two signed errors (%).
+ *  - Arithmetic should be exact: more than 1% away from your own reading is a slip.
+ *  - A reading within ±3% is about as good as a reticle allows (0.1 MIL on a
+ *    3+ MIL target); beyond that, say which way it was off and what that did.
+ *  - When both are off, lead with whichever caused more of the miss.
  */
 export function classifyMistake(readingErrorPct, mathErrorPct) {
-  return null;
+  const reading = Math.abs(readingErrorPct);
+  const maths = Math.abs(mathErrorPct);
+  const readingOk = reading <= 3;
+  const mathsOk = maths <= 1;
+  const readingTip = readingErrorPct > 0
+    ? 'You read the target too big, which puts your answer too close.'
+    : 'You read the target too small, which puts your answer too far.';
+  const mathsTip = 'Check the arithmetic: size in mm ÷ MIL reading = metres.';
+
+  if (readingOk && mathsOk) return 'Good reading and correct arithmetic.';
+  if (readingOk) return `Your reading was good. ${mathsTip}`;
+  if (mathsOk) return `Your arithmetic was right; the reading was off by ${reading.toFixed(0)}%. ${readingTip}`;
+  return reading >= maths
+    ? `Mostly the reading (${reading.toFixed(0)}% off). ${readingTip} The arithmetic was also ${maths.toFixed(0)}% off.`
+    : `Mostly the arithmetic (${maths.toFixed(0)}% off). ${mathsTip} The reading was also ${reading.toFixed(0)}% off.`;
 }

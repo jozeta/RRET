@@ -24,6 +24,7 @@ const PRECACHE = [
   'js/scenario-logic.js',
   'js/scope.js',
   'js/settings.js',
+  'js/shared-set.js',
   'js/station.js',
   'js/storage.js',
   'js/target-art.js',

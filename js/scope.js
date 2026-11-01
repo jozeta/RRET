@@ -79,6 +79,10 @@ export class ScopeEngine {
     this.targetOffsetMILY = 0;
     this.environment = 'field';
     this.truthOverlay = false; // FEAT-003: brackets showing the true extents after answering
+    // Realism layers (each optional): 'mirage', 'sway', 'grass', 'acquire', 'lowlight'.
+    this.realism = new Set();
+    this.animating = false;
+    this.visible = true;
 
     // Display / reticle settings
     this.reticleType = 'mil_dot';
@@ -206,9 +210,15 @@ export class ScopeEngine {
     this.environment = scenario.environment || 'field';
     this.truthOverlay = false;
 
-    // Center view on the target
+    // Centre the view on the target, or (Find the target) start aimed off to one side.
     this.panX = this.targetOffsetMILX;
     this.panY = this.targetOffsetMILY;
+    if (this.realism.has('acquire') && this.canvasSize) {
+      const half = this.canvasSize / 2 / this.pxPerMILAt();
+      const r = (k) => { const v = Math.sin((scenario.distance * 12.9898 + k * 78.233) % 1000) * 43758.5453; return v - Math.floor(v); };
+      this.panX += (r(1) < 0.5 ? -1 : 1) * half * (0.55 + 0.35 * r(2));
+      this.panY += (r(3) - 0.5) * half * 0.6;
+    }
 
     this.rasterEdge = 0;
     this.prepareTargetOffscreen();
@@ -331,6 +341,10 @@ export class ScopeEngine {
     const dpr = this.dpr || 1;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
+    // Hold sway moves the whole view (not the reticle) for this frame only.
+    const sway = this.measurementMode ? null : this.swayOffset();
+    if (sway) { this.panX += sway.x; this.panY += sway.y; }
+
     // 1. Environmental background (a flat colour in measurement mode, used by the
     //    browser tests to measure the rendered target in pixels).
     if (this.measurementMode) {
@@ -371,11 +385,19 @@ export class ScopeEngine {
       if (offSize) {
         this.ctx.imageSmoothingEnabled = true;
         this.ctx.imageSmoothingQuality = 'high';
-        this.ctx.drawImage(
-          this.targetOffscreenCanvas,
-          0, 0, offSize.width, offSize.height,
-          screenTargetX, screenTargetY, targetPxWidth, targetPxHeight
-        );
+        const shimmer = this.measurementMode ? 0 : this.mirageAmplitudePx(pixelsPerMIL);
+        if (shimmer > 0.15) {
+          this.drawTargetWithMirage(offSize, screenTargetX, screenTargetY, targetPxWidth, targetPxHeight, shimmer);
+        } else {
+          this.ctx.drawImage(
+            this.targetOffscreenCanvas,
+            0, 0, offSize.width, offSize.height,
+            screenTargetX, screenTargetY, targetPxWidth, targetPxHeight
+          );
+        }
+      }
+      if (!this.measurementMode && this.realism.has('grass')) {
+        this.drawForegroundGrass(screenTargetX, screenTargetY, targetPxWidth, targetPxHeight);
       }
 
       // Re-rasterize at a higher resolution once the on-screen size outgrows the
@@ -391,8 +413,116 @@ export class ScopeEngine {
       }
     }
 
-    // 3. Environmental overlays (fog, rain, snow)
-    if (!this.measurementMode) this.renderWeatherOverlay(width, height);
+    // 3. Environmental overlays (fog, rain, snow) and low light
+    if (!this.measurementMode) {
+      this.renderWeatherOverlay(width, height);
+      if (this.realism.has('lowlight')) this.drawLowLight(width, height);
+    }
+    if (sway) { this.panX -= sway.x; this.panY -= sway.y; }
+  }
+
+  /* ---- Realism layers ---------------------------------------------------- */
+
+  /** Turns realism layers on/off; animated ones (mirage, sway) run a frame loop. */
+  setRealism(layers) {
+    this.realism = new Set(layers);
+    this.updateAnimation();
+    this.requestRender();
+  }
+
+  setVisible(visible) {
+    this.visible = visible;
+    this.updateAnimation();
+  }
+
+  updateAnimation() {
+    const want = this.visible && (this.realism.has('sway') || this.realism.has('mirage'));
+    if (want && !this.animating) {
+      this.animating = true;
+      const loop = () => {
+        if (!this.animating) return;
+        this.render();
+        requestAnimationFrame(loop);
+      };
+      requestAnimationFrame(loop);
+    } else if (!want) {
+      this.animating = false;
+    }
+  }
+
+  /**
+   * Hold sway in MIL: a slow breathing cycle (mostly vertical), a wandering drift
+   * and a faint tremor. Roughly what a steady prone or rested hold looks like.
+   */
+  swayOffset() {
+    if (!this.realism.has('sway')) return null;
+    const t = performance.now() / 1000;
+    const breath = Math.sin((2 * Math.PI * t) / 4.2);
+    const driftX = Math.sin(t * 0.37) * 0.6 + Math.sin(t * 0.83 + 1.3) * 0.4;
+    const driftY = Math.sin(t * 0.29 + 2.1) * 0.5 + Math.sin(t * 0.71) * 0.5;
+    const tremor = Math.sin(t * 43) * 0.012 + Math.sin(t * 61 + 0.7) * 0.01;
+    return { x: driftX * 0.1 + tremor, y: breath * 0.16 + driftY * 0.06 + tremor };
+  }
+
+  /** Mirage strength in px: none under 250 m, growing to full by 800 m. */
+  mirageAmplitudePx(ppm) {
+    if (!this.realism.has('mirage') || !this.target) return 0;
+    const f = Math.max(0, Math.min(1, (this.distance - 250) / 550));
+    return f * Math.min(4, 0.05 * ppm + 0.6);
+  }
+
+  /** Draws the target in thin horizontal bands that waver sideways (heat shimmer). */
+  drawTargetWithMirage(offSize, x, y, w, h, amp) {
+    const ctx = this.ctx;
+    const t = performance.now() / 1000;
+    const bands = Math.max(12, Math.min(80, Math.round(h / 2)));
+    const bandSrc = offSize.height / bands;
+    const bandDst = h / bands;
+    for (let i = 0; i < bands; i++) {
+      const phase = i * 0.55 + t * 5.5;
+      const dx = amp * (Math.sin(phase) * 0.7 + Math.sin(phase * 2.3 + 1.7) * 0.3);
+      ctx.drawImage(this.targetOffscreenCanvas, 0, i * bandSrc, offSize.width, bandSrc + 0.5, x + dx, y + i * bandDst, w, bandDst + 0.5);
+    }
+  }
+
+  /** Grass in front of the target's base, covering up to ~20% of its height. */
+  drawForegroundGrass(x, y, w, h) {
+    const ctx = this.ctx;
+    const style = ENV_STYLES[this.environment] || ENV_STYLES.forest;
+    const baseY = y + h + 1;
+    const maxH = Math.min(h * 0.2, (0.35 * 1000 / this.distance) * this.pxPerMILAt());
+    if (maxH < 1.5) return;
+    const span = w * 1.6;
+    const count = Math.max(10, Math.min(160, Math.round(span / 2.5)));
+    ctx.save();
+    ctx.strokeStyle = this.environment === 'snow' ? 'rgba(120, 132, 140, 0.9)' : style.ground[1];
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(1, maxH * 0.07);
+    ctx.beginPath();
+    for (let i = 0; i < count; i++) {
+      const s1 = this.detailSeed(i, 701);
+      const s2 = this.detailSeed(i, 702);
+      const gx = x + w / 2 - span / 2 + (i / count) * span + (s1 - 0.5) * 4;
+      const gh = maxH * (0.45 + 0.55 * s2);
+      ctx.moveTo(gx, baseY);
+      ctx.quadraticCurveTo(gx + (s1 - 0.5) * gh * 0.4, baseY - gh * 0.6, gx + (s2 - 0.5) * gh * 0.6, baseY - gh);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** Dusk / poor light: darker, cooler and less saturated. */
+  drawLowLight(w, h) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = '#5f677a';
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'saturation';
+    ctx.globalAlpha = 0.45;
+    ctx.fillStyle = '#808080';
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
   }
 
   /** Orange dimension brackets with the true MIL values (FEAT-003). */

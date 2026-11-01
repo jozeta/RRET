@@ -28,6 +28,14 @@ test('computeStats derives aggregates from history', () => {
   assert.equal(s.personalBestAccuracyPct, 100);
 });
 
+test('streaks count consecutive rounds within 5%', () => {
+  // newest first: in, in, out, in, in, in
+  const s = computeStats([round('f', 80, 4), round('e', 90, 1), round('d', 0, 12), round('c', 100, 0), round('b', 80, 5), round('a', 95, 0.8)]);
+  assert.equal(s.within5, 5);
+  assert.equal(s.bestStreak, 3);
+  assert.equal(s.currentStreak, 2);
+});
+
 test('migration backs up, de-duplicates and drops the stale aggregate', () => {
   localStorage.setItem('rret_history_v1', JSON.stringify([round('s1', 80, 4), round('s1', 80, 4)]));
   localStorage.setItem('rret_stats_v1', JSON.stringify({ roundsPlayed: 2 }));

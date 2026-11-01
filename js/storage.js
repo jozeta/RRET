@@ -41,7 +41,8 @@ const DEFAULT_SETTINGS = {
 const DEFAULT_SIM_PREFS = {
   environment: 'random',
   categories: [],
-  distance: 'any'
+  distance: 'any',
+  realism: [] // 'mirage' | 'sway' | 'grass' | 'acquire' | 'lowlight'
 };
 
 /** Pure: removes repeat submissions of the same scenario (audit BUG-002/003),
@@ -62,7 +63,10 @@ export function dedupeHistory(history) {
 
 /** Pure: aggregate stats from a newest-first history array. */
 export function computeStats(history) {
-  const stats = { roundsPlayed: 0, totalScore: 0, bestScore: 0, totalErrorPct: 0, personalBestAccuracyPct: 0 };
+  const stats = {
+    roundsPlayed: 0, totalScore: 0, bestScore: 0, totalErrorPct: 0, personalBestAccuracyPct: 0,
+    within5: 0, currentStreak: 0, bestStreak: 0
+  };
   // Walk oldest -> newest so "best accuracy" is the best running average reached.
   for (let i = history.length - 1; i >= 0; i--) {
     const h = history[i];
@@ -71,6 +75,14 @@ export function computeStats(history) {
     stats.totalScore += h.score;
     stats.totalErrorPct += h.errorPct;
     if (h.score > stats.bestScore) stats.bestScore = h.score;
+    // "Within 5%" is the 80-point band; a streak is consecutive rounds inside it.
+    if (h.errorPct <= 5) {
+      stats.within5 += 1;
+      stats.currentStreak += 1;
+      if (stats.currentStreak > stats.bestStreak) stats.bestStreak = stats.currentStreak;
+    } else {
+      stats.currentStreak = 0;
+    }
     const running = Math.max(0, Math.round(100 - stats.totalErrorPct / stats.roundsPlayed));
     if (running > stats.personalBestAccuracyPct) stats.personalBestAccuracyPct = running;
   }
@@ -171,6 +183,7 @@ export class StorageManager {
     const stored = readJSON(STORAGE_KEYS.SIM_PREFS, {});
     const prefs = { ...DEFAULT_SIM_PREFS, ...(stored && typeof stored === 'object' ? stored : {}) };
     if (!Array.isArray(prefs.categories)) prefs.categories = [];
+    if (!Array.isArray(prefs.realism)) prefs.realism = [];
     return prefs;
   }
 

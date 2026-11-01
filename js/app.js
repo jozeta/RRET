@@ -11,6 +11,7 @@ import { TutorialController } from './tutorial.js';
 import { StationController } from './station.js';
 import { AnalyticsController } from './analytics.js';
 import { ReticleHelp } from './reticle-help.js';
+import { SharedSetController } from './shared-set.js';
 import { loadReticles } from './reticles.js';
 import { sfx, escapeHTML } from './utils.js';
 import { formatDistance } from './scenario-logic.js';
@@ -32,6 +33,7 @@ class Application {
     this.tutorial = new TutorialController(this);
     this.analytics = new AnalyticsController(this);
     this.reticleHelp = new ReticleHelp(this);
+    this.sharedSet = new SharedSetController(this);
   }
 
   async init() {
@@ -60,6 +62,7 @@ class Application {
     this.tutorial.init();
     this.analytics.init();
     this.reticleHelp.init();
+    this.sharedSet.init();
 
     this.updateOpticsNote();
 
@@ -68,8 +71,9 @@ class Application {
     this.bindScopeControlsBar();
     this.updateStatsUI();
 
-    // 6. First scenario (the timer only starts once the simulator is visible)
-    this.training.startNewScenario();
+    // 6. First scenario: a shared set from the link, or a random one. (The timer
+    //    only starts once the simulator is visible.)
+    if (!this.sharedSet.startFromHash(window.location.hash)) this.training.startNewScenario();
 
     // 7. Route to the page in the URL
     this.showPage(this.pageFromHash(), { initial: true });
@@ -110,7 +114,7 @@ class Application {
   }
 
   pageFromHash() {
-    const hash = window.location.hash.replace('#', '');
+    const hash = window.location.hash.replace('#', '').split('?')[0];
     return PAGES.includes(hash) ? hash : 'home';
   }
 
@@ -125,7 +129,11 @@ class Application {
         this.navigateTo(e.currentTarget.dataset.pageTarget);
       });
     });
-    window.addEventListener('hashchange', () => this.showPage(this.pageFromHash()));
+    window.addEventListener('hashchange', () => {
+      // A shared-set link opened in an already-open tab
+      if (window.location.hash.includes('set=')) this.sharedSet.startFromHash(window.location.hash);
+      this.showPage(this.pageFromHash());
+    });
   }
 
   navigateTo(pageId) {
@@ -187,11 +195,11 @@ class Application {
 
     const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
     set('stat-rounds-played', stats.roundsPlayed);
-    set('stat-best-score', stats.bestScore);
     const avg = stats.roundsPlayed > 0 ? stats.totalErrorPct / stats.roundsPlayed : 0;
-    set('stat-avg-error', `${avg.toFixed(1)}%`);
-    set('stat-accuracy-pct', `${stats.roundsPlayed > 0 ? Math.max(0, Math.round(100 - avg)) : 0}%`);
-    set('stat-best-accuracy', `${stats.personalBestAccuracyPct}%`);
+    set('stat-avg-error', stats.roundsPlayed ? `${avg.toFixed(1)}%` : '–');
+    set('stat-within5', stats.roundsPlayed ? `${Math.round((stats.within5 / stats.roundsPlayed) * 100)}%` : '–');
+    set('stat-current-streak', stats.currentStreak);
+    set('stat-best-streak', stats.bestStreak);
 
     const historyTableBody = document.getElementById('history-table-body');
     if (historyTableBody) {

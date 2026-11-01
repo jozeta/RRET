@@ -12,6 +12,8 @@ import {
 import { diagnoseEstimate } from './coach.js';
 import { setFieldError, toast } from './ui.js';
 
+export const REALISM_LAYERS = ['mirage', 'sway', 'grass', 'acquire', 'lowlight'];
+
 const ENV_LABELS = { forest: 'Forest', field: 'Field', snow: 'Snow', mountain: 'Mountain', desert: 'Desert', urban: 'City', range: 'Shooting range', fog: 'Fog', rain: 'Rain', dusk: 'Dusk' };
 
 const isCoarsePointer = () => window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
@@ -32,6 +34,7 @@ export class TrainingManager {
     this.environmentPreference = prefs.environment;
     this.categoryFilter = new Set(prefs.categories.filter(c => TARGET_CATEGORIES.includes(c)));
     this.distanceFilter = DISTANCE_BANDS[prefs.distance] ? prefs.distance : 'any';
+    this.realism = new Set(prefs.realism.filter(r => REALISM_LAYERS.includes(r)));
 
     // Optional station mode controller (FEAT-004) registers itself here.
     this.station = null;
@@ -45,6 +48,7 @@ export class TrainingManager {
     const distSel = document.getElementById('sim-distance-filter');
     if (distSel) distSel.value = this.distanceFilter;
     this.applyCoachModeUI();
+    this.bindRealism();
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) this.pauseTimer();
       else if (this.simulatorVisible) this.resumeTimer();
@@ -59,8 +63,29 @@ export class TrainingManager {
     StorageManager.saveSimPrefs({
       environment: this.environmentPreference,
       categories: [...this.categoryFilter],
-      distance: this.distanceFilter
+      distance: this.distanceFilter,
+      realism: [...this.realism]
     });
+  }
+
+  /** Field-condition switches (mirage, sway, grass, find the target, low light). */
+  bindRealism() {
+    const box = document.getElementById('sim-realism');
+    if (!box) return;
+    box.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      cb.checked = this.realism.has(cb.value);
+      cb.closest('.realism-chip')?.classList.toggle('active', cb.checked);
+      cb.addEventListener('change', () => {
+        if (cb.checked) this.realism.add(cb.value); else this.realism.delete(cb.value);
+        cb.closest('.realism-chip')?.classList.toggle('active', cb.checked);
+        this.persistPrefs();
+        this.app.scope.setRealism([...this.realism]);
+        if (cb.value === 'lowlight' && cb.checked && /^#(0|1)/.test(StorageManager.getSettings().reticleColor)) {
+          toast('A black reticle is hard to see in low light. An illuminated reticle (Settings) helps, as on a real scope.', 'info', 6000);
+        }
+      });
+    });
+    this.app.scope.setRealism([...this.realism]);
   }
 
   setDistanceFilter(value) {
@@ -140,6 +165,10 @@ export class TrainingManager {
    */
   startNewScenario(forcedTarget = null) {
     if (this.station && this.station.active && !forcedTarget) return false;
+    // In a shared set, "Next target" means the next target of the set.
+    const set = this.app.sharedSet;
+    if (set && set.active && !forcedTarget) return set.next();
+    if (set && set.active && forcedTarget) set.leave({ startNew: false });
     let target = forcedTarget;
     if (!target) {
       let pool = this.getFilteredTargetPool();
@@ -271,11 +300,13 @@ export class TrainingManager {
 
   onSimulatorShown() {
     this.simulatorVisible = true;
+    this.app.scope.setVisible(true);
     if (!document.hidden) this.resumeTimer();
   }
 
   onSimulatorHidden() {
     this.simulatorVisible = false;
+    this.app.scope.setVisible(false);
     this.pauseTimer();
   }
 
@@ -363,6 +394,7 @@ export class TrainingManager {
       score: evalResult.score,
       unit: answer.unit,
       milReading: answer.userMil || undefined,
+      realism: this.realism.size ? [...this.realism] : undefined,
       timeSeconds
     };
   }

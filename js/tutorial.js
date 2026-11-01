@@ -172,31 +172,40 @@ export class TutorialController {
 
     if (!unitSel || !sizeInput || !milInput) return;
 
+    const num = (el) => {
+      const v = parseFloat(String(el.value).replace(',', '.'));
+      return Number.isFinite(v) && v > 0 ? v : null;
+    };
+
+    // Shows the result only for valid input; otherwise says what is missing
+    // instead of silently substituting a default value.
     const updateCalc = () => {
       const isImperial = unitSel.value === 'imperial';
-      const sizeVal = parseFloat(sizeInput.value) || 0.65;
-      const milVal = parseFloat(milInput.value) || 1.0;
-
+      sizeLabel.textContent = isImperial ? 'Target size (inches)' : 'Target size (metres)';
+      const sizeVal = num(sizeInput);
+      const milVal = num(milInput);
+      if (sizeVal === null || milVal === null) {
+        resultDist.textContent = '–';
+        resultFormula.textContent = sizeVal === null
+          ? 'Enter the target size (a number above 0).'
+          : 'Enter your MIL reading (a number above 0).';
+        return;
+      }
       if (isImperial) {
-        sizeLabel.textContent = 'TARGET SIZE (inches)';
-        // Distance (yards) = (Size (in) * 27.77) / MIL
-        const yards = Math.round((sizeVal * 27.77) / Math.max(0.1, milVal));
-        resultDist.textContent = `${yards} yards`;
-        resultFormula.textContent = `Formula: (${sizeVal}" × 27.77) / ${milVal} MIL = ${yards} yards`;
+        const yards = (sizeVal * 27.778) / milVal;
+        resultDist.textContent = `${Math.round(yards)} yards`;
+        resultFormula.textContent = `(${sizeVal} in × 27.78) ÷ ${milVal} MIL = ${Math.round(yards)} yards`;
       } else {
-        sizeLabel.textContent = 'TARGET SIZE (meters)';
-        // Distance (m) = (Size (m) * 1000) / MIL
-        const meters = Math.round((sizeVal * 1000) / Math.max(0.1, milVal));
-        resultDist.textContent = `${meters} m`;
-        resultFormula.textContent = `Formula: (${sizeVal}m × 1000) / ${milVal} MIL = ${meters}m`;
+        const meters = (sizeVal * 1000) / milVal;
+        resultDist.textContent = `${Math.round(meters)} m`;
+        resultFormula.textContent = `(${sizeVal} m × 1000) ÷ ${milVal} MIL = ${Math.round(meters)} m`;
       }
     };
 
     unitSel.addEventListener('change', () => {
-      if (unitSel.value === 'imperial') {
-        sizeInput.value = (parseFloat(sizeInput.value) * 39.3701).toFixed(1);
-      } else {
-        sizeInput.value = (parseFloat(sizeInput.value) / 39.3701).toFixed(2);
+      const v = num(sizeInput);
+      if (v !== null) {
+        sizeInput.value = unitSel.value === 'imperial' ? (v * 39.3701).toFixed(1) : (v / 39.3701).toFixed(3);
       }
       updateCalc();
     });
@@ -220,7 +229,27 @@ export class TutorialController {
     updateCalc();
   }
 
+  /** Shuffle each question's options and re-letter them, so the right answer
+   *  isn't always in the same place. */
+  shuffleQuiz() {
+    document.querySelectorAll('.quiz-card').forEach(card => {
+      const row = card.querySelector('.row');
+      if (!row) return;
+      const cols = [...row.children];
+      for (let i = cols.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [cols[i], cols[j]] = [cols[j], cols[i]];
+      }
+      cols.forEach((col, k) => {
+        const btn = col.querySelector('.quiz-option-btn');
+        if (btn) btn.textContent = `${'ABCD'[k]}) ${btn.textContent.replace(/^[A-D]\)\s*/, '')}`;
+        row.appendChild(col);
+      });
+    });
+  }
+
   bindQuizEvents() {
+    this.shuffleQuiz();
     const quizButtons = document.querySelectorAll('.quiz-option-btn');
     quizButtons.forEach(btn => {
       btn.addEventListener('click', (e) => {

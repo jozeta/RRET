@@ -37,6 +37,13 @@ Audit fixes and new training features (pull request #1).
 - Fur, paint, cardboard and steel textures on all targets (clipped to the outline, so sizes are unchanged).
 - Clouds, textured ground, horizon haze, shaded and textured spruce, rock faces, earth berms and concrete facades, all anchored to the world as you pan and zoom.
 
+### Training
+- Field conditions you can switch on: mirage (beyond 250 m), hold sway, grass covering the target's base, finding the target, and low light. Recorded with each round.
+- Club sessions: "Share a set" makes a link that gives everyone the same targets, distances and conditions, with progress and a summary at the end.
+- Coach mode now says in words whether a miss came from the reading or the arithmetic, and which way.
+- Home stats: rounds within 5%, current streak and best streak replace the abstract accuracy figures.
+- Learn: quiz answers are shuffled; the calculator no longer invents values for empty fields.
+
 ### Design
 - New visual identity: spruce and cartridge-brass palette, Archivo variable type, sentence case throughout, calmer panels and segmented controls; a redrawn scope-view hero on Home.
 

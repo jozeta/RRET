@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { RETICLE_DESIGNS, RETICLE_CATALOG, reticleItems, reticleSVG } from '../js/reticle-designs.js';
 import { TARGET_CATEGORIES, CUSTOM_TARGET_SHAPES } from '../js/targets.js';
-import { diagnoseEstimate } from '../js/coach.js';
+import { diagnoseEstimate, classifyMistake } from '../js/coach.js';
 import { computeAnalytics, bandOf } from '../js/analytics.js';
 import { ART_TYPES } from '../js/target-art.js';
 const hasRenderer = (t) => ART_TYPES.has(t) || utilsSrc.includes(`case '${t}'`);
@@ -148,4 +148,13 @@ test('data dimensions match the drawn artwork exactly (animals, people, IPSC)', 
 test('every reticle states what its marks are worth', () => {
   assert.ok(reticles.length >= 12);
   for (const r of reticles) assert.ok(typeof r.scale === 'string' && /MIL/.test(r.scale), `${r.id} has no scale legend`);
+});
+
+test('coach messages name the real cause of a miss', () => {
+  assert.match(classifyMistake(1, 0.2), /Good reading and correct arithmetic/);
+  assert.match(classifyMistake(0.5, 6), /reading was good.*arithmetic/i);
+  assert.match(classifyMistake(10, 0), /too big.*too close/);
+  assert.match(classifyMistake(-10, 0), /too small.*too far/);
+  assert.match(classifyMistake(12, 4), /^Mostly the reading/);
+  assert.match(classifyMistake(4, 12), /^Mostly the arithmetic/);
 });

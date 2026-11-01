@@ -139,37 +139,37 @@
       <div class="row g-3 mb-5">
         <div class="col-6 col-md-4 col-lg">
           <div class="stat-box">
-            <div class="stat-label">Rounds completed</div>
-            <div class="stat-value text-tan-light" id="stat-rounds-played">0</div>
-            <div class="stat-subtext">Total scenarios solved</div>
-          </div>
-        </div>
-        <div class="col-6 col-md-4 col-lg">
-          <div class="stat-box highlight">
-            <div class="stat-label">Best score</div>
-            <div class="stat-value text-orange-highlight" id="stat-best-score">0</div>
-            <div class="stat-subtext">Personal high score</div>
+            <div class="stat-label">Rounds</div>
+            <div class="stat-value" id="stat-rounds-played">0</div>
+            <div class="stat-subtext">Scored attempts</div>
           </div>
         </div>
         <div class="col-6 col-md-4 col-lg">
           <div class="stat-box">
             <div class="stat-label">Average error</div>
-            <div class="stat-value text-main" id="stat-avg-error">0%</div>
-            <div class="stat-subtext">Deviation percentage</div>
+            <div class="stat-value" id="stat-avg-error">0</div>
+            <div class="stat-subtext">How far off, on average</div>
           </div>
         </div>
-        <div class="col-6 col-md-6 col-lg">
+        <div class="col-6 col-md-4 col-lg">
           <div class="stat-box">
-            <div class="stat-label">Accuracy (100 − mean error)</div>
-            <div class="stat-value text-success" id="stat-accuracy-pct">0%</div>
-            <div class="stat-subtext">Overall precision score</div>
+            <div class="stat-label">Within 5%</div>
+            <div class="stat-value" id="stat-within5">0</div>
+            <div class="stat-subtext">Rounds scoring 80 or more</div>
           </div>
         </div>
-        <div class="col-6 col-md-6 col-lg">
+        <div class="col-6 col-md-4 col-lg">
           <div class="stat-box">
-            <div class="stat-label">Best running accuracy</div>
-            <div class="stat-value text-success" id="stat-best-accuracy">0%</div>
-            <div class="stat-subtext">Personal best precision</div>
+            <div class="stat-label">Current streak</div>
+            <div class="stat-value" id="stat-current-streak">0</div>
+            <div class="stat-subtext">Rounds in a row within 5%</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg">
+          <div class="stat-box">
+            <div class="stat-label">Best streak</div>
+            <div class="stat-value" id="stat-best-streak">0</div>
+            <div class="stat-subtext">Your longest run within 5%</div>
           </div>
         </div>
       </div>
@@ -289,6 +289,7 @@
               <span class="badge badge-orange mono-font" id="sim-shot-timer" aria-label="Elapsed time">00:00</span>
             </div>
             <div class="card-body">
+              <div class="shared-set-banner small mb-3" id="shared-set-banner" hidden aria-live="polite"></div>
               <div class="d-flex justify-content-between align-items-center mb-3 gap-2">
                 <div>
                   <h3 class="tactical-font text-tan-light mb-0" id="sim-target-name">Loading…</h3>
@@ -432,6 +433,32 @@
               </div>
               <div class="small mt-2" id="sim-filter-status" aria-live="polite"></div>
             </div>
+
+            <div class="mt-3 share-set">
+              <div class="small text-muted mb-1">Club session</div>
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <label for="share-set-size" class="visually-hidden">Number of targets</label>
+                <select id="share-set-size" class="form-select-tactical form-select-sm" style="width:auto">
+                  <option value="5">5 targets</option>
+                  <option value="10" selected>10 targets</option>
+                  <option value="20">20 targets</option>
+                </select>
+                <button type="button" class="btn btn-sm btn-tactical-outline" id="btn-share-set">Share a set</button>
+              </div>
+              <input type="text" readonly class="form-control-tactical form-control-sm w-100 mt-2" id="share-set-link" hidden aria-label="Shareable link">
+              <div class="small text-muted mt-1">Everyone who opens the link gets the same targets, distances and conditions, using your current filters.</div>
+            </div>
+
+            <fieldset class="mt-3 realism-options">
+              <legend class="small text-muted mb-1">Field conditions</legend>
+              <div class="d-flex flex-wrap gap-2" id="sim-realism">
+                <label class="realism-chip" title="Heat shimmer makes the target's edges waver beyond 250 m"><input type="checkbox" value="mirage"> Mirage</label>
+                <label class="realism-chip" title="The view moves gently with your breathing and hold"><input type="checkbox" value="sway"> Hold sway</label>
+                <label class="realism-chip" title="Grass hides the bottom of the target"><input type="checkbox" value="grass"> Grass cover</label>
+                <label class="realism-chip" title="Each scenario starts aimed off to the side"><input type="checkbox" value="acquire"> Find the target</label>
+                <label class="realism-chip" title="Dusk light: darker, with less contrast; try an illuminated reticle"><input type="checkbox" value="lowlight"> Low light</label>
+              </div>
+            </fieldset>
           </div>
         </div>
       </div>

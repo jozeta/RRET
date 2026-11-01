@@ -62,6 +62,11 @@ export class StationController {
   setMode(mode) {
     if (mode === this.mode) return;
     if (this.active && !confirm('Leave the station? Your answers for this station will be discarded.')) return;
+    if (mode === 'station' && this.app.sharedSet && this.app.sharedSet.active) {
+      this.app.sharedSet.active = null;
+      const banner = document.getElementById('shared-set-banner');
+      if (banner) { banner.hidden = true; banner.innerHTML = ''; }
+    }
     this.cancel();
     this.mode = mode === 'station' ? 'station' : 'free';
 

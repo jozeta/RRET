@@ -401,6 +401,76 @@ await check('every reticle has a help panel with a drawing and steps, and "Use t
   assert(await evaluate(`app.scope.reticleType`) === ids[ids.length - 1], 'reticle not selected');
 });
 
+await check('field conditions: mirage, sway, grass, find the target and low light all change the view', async () => {
+  await load();
+  const r = await evaluate(`(async () => {
+    const s = app.scope;
+    const t = app.targetsController.getTargetById('swe_b65');
+    const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const snap = () => { s.render(); return document.getElementById('scope-canvas').toDataURL(); };
+    s.setRealism([]);
+    s.setScenario({ target: t, distance: 600, offsetX: 0, environment: 'field' });
+    s.setZoom(12);
+    for (let i = 0; i < 30 && !s.targetOffscreenSize; i++) await frame();
+    await frame();
+    const plain = snap();
+    const out = {};
+    for (const fx of ['mirage', 'grass', 'lowlight']) { s.setRealism([fx]); out[fx] = snap() !== plain; }
+    s.setRealism(['sway']);
+    const p1 = s.swayOffset(); await new Promise(r => setTimeout(r, 300)); const p2 = s.swayOffset();
+    out.sway = !!p1 && (p1.x !== p2.x || p1.y !== p2.y) && Math.abs(p1.y) < 0.3;
+    s.setRealism(['acquire']);
+    s.setScenario({ target: t, distance: 600, offsetX: 0, environment: 'field' });
+    out.acquire = Math.abs(s.panX - s.targetOffsetMILX) > 0.3;
+    s.setRealism([]);
+    return out;
+  })()`);
+  assert(r.mirage && r.grass && r.lowlight && r.sway && r.acquire, JSON.stringify(r));
+});
+
+await check('a shared-set link gives the same targets on every load, with progress and a summary', async () => {
+  const link = `${BASE}?s=1#simulator?set=club2026&n=5`;
+  const first = async () => {
+    await send('Page.navigate', { url: link.replace('?s=1', `?s=${Date.now()}`) });
+    await waitForApp();
+    return evaluate(`({ id: app.training.currentScenario.target.id, d: app.training.currentScenario.distance, banner: document.getElementById('shared-set-banner').textContent })`);
+  };
+  await load();
+  const a = await first();
+  const b = await first();
+  assert(a.id === b.id && a.d === b.d, `${JSON.stringify(a)} vs ${JSON.stringify(b)}`);
+  assert(/1 of 5/.test(a.banner), a.banner);
+  await evaluate(`window.confirm = () => true`);
+  for (let i = 0; i < 5; i++) {
+    await evaluate(`document.getElementById('sim-estimated-distance').value = String(Math.round(app.training.currentScenario.distance)); document.getElementById('sim-estimate-form').requestSubmit();`);
+    await click('#btn-next-scenario');
+  }
+  const done = await evaluate(`document.getElementById('shared-set-banner').textContent`);
+  assert(/Set complete/.test(done) && /5 of 5 answered, 5 within 5%/.test(done), done);
+});
+
+await check('home stats show rounds within 5% and streaks', async () => {
+  await load('home', { clear: false });
+  const r = await evaluate(`({ w: document.getElementById('stat-within5').textContent, best: document.getElementById('stat-best-streak').textContent })`);
+  assert(/%$/.test(r.w) && Number(r.best) >= 5, JSON.stringify(r));
+});
+
+await check('Learn: quiz options are re-lettered after shuffling; calculator rejects empty input', async () => {
+  await load('learn');
+  const r = await evaluate(`(() => {
+    const cards = [...document.querySelectorAll('.quiz-card')];
+    const lettered = cards.every(c => [...c.querySelectorAll('.quiz-option-btn')].map(b => b.textContent.trim()[0]).join('') === 'ABCD');
+    const oneCorrect = cards.every(c => c.querySelectorAll('[data-correct="true"]').length === 1);
+    const size = document.getElementById('calc-size-input');
+    size.value = ''; size.dispatchEvent(new Event('input'));
+    const empty = document.getElementById('calc-result-distance').textContent;
+    document.getElementById('calc-unit').value = 'imperial';
+    document.getElementById('calc-unit').dispatchEvent(new Event('change'));
+    return { lettered, oneCorrect, empty, nan: /NaN/.test(size.value + document.getElementById('calc-result-formula').textContent) };
+  })()`);
+  assert(r.lettered && r.oneCorrect && r.empty === '–' && !r.nan, JSON.stringify(r));
+});
+
 await check('realistic optics uses the calibration (FEAT-001)', async () => {
   const ppm = await evaluate(`(() => { app.scope.updateSettings({ opticsMode: 'realistic', screenPxPerMm: 4, viewingDistanceCm: 50, scopeProfile: 'precision' }); const v = { ppm: app.scope.pxPerMILAt(10), min: app.scope.minZoom }; app.scope.updateSettings({ opticsMode: 'arcade' }); return v; })()`);
   assert(Math.abs(ppm.ppm - 20) < 1e-9 && ppm.min === 5, JSON.stringify(ppm));
