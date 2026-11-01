@@ -13,6 +13,29 @@ export const SCOPE_PROFILES = {
   precision: { label: 'Precision 5–25x', minZoom: 5, maxZoom: 25 }
 };
 
+function shadeHex(hex, amt) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (v) => Math.max(0, Math.min(255, Math.round(v + amt))).toString(16).padStart(2, '0');
+  return `#${c((n >> 16) & 255)}${c((n >> 8) & 255)}${c(n & 255)}`;
+}
+
+/** Shooter's eye height above the ground plane (prone/sitting field position). */
+export const EYE_HEIGHT_M = 1.0;
+
+/** Sky and ground colours plus ground texture per environment. */
+const ENV_STYLES = {
+  forest: { sky: ['#8fa9b8', '#cbd7d6'], ground: ['#55683f', '#2c3a22'], tex: 'grass', texColor: 'rgba(20, 32, 14, 0.5)' },
+  field: { sky: ['#7fa9d1', '#d6e3ea'], ground: ['#86a250', '#4e6a2c'], tex: 'grass', texColor: 'rgba(40, 62, 20, 0.5)' },
+  snow: { sky: ['#a9bfd1', '#e4ebf1'], ground: ['#f2f5f8', '#d0dbe4'], tex: 'snow', texColor: 'rgba(140, 160, 182, 0.5)' },
+  mountain: { sky: ['#7d97ab', '#c7d2d9'], ground: ['#646f55', '#363f30'], tex: 'grass', texColor: 'rgba(25, 32, 20, 0.5)' },
+  desert: { sky: ['#9fc3de', '#efe2c8'], ground: ['#d6b07a', '#a77f4b'], tex: 'pebble', texColor: 'rgba(110, 80, 45, 0.45)' },
+  urban: { sky: ['#6d7c88', '#abb4ba'], ground: ['#5c6064', '#34383b'], tex: 'pavement', texColor: 'rgba(20, 22, 24, 0.45)' },
+  range: { sky: ['#a3bfd3', '#e0e6e3'], ground: ['#a09676', '#6f6750'], tex: 'pebble', texColor: 'rgba(60, 55, 40, 0.4)' },
+  fog: { sky: ['#c3cbce', '#d6dcde'], ground: ['#949d94', '#6f786f'], tex: 'grass', texColor: 'rgba(50, 60, 50, 0.35)' },
+  rain: { sky: ['#4d5964', '#77828b'], ground: ['#45523b', '#262e21'], tex: 'grass', texColor: 'rgba(15, 22, 12, 0.5)' },
+  dusk: { sky: ['#3b2047', '#d77a4e'], ground: ['#4a3236', '#22181b'], tex: 'grass', texColor: 'rgba(10, 6, 8, 0.45)' }
+};
+
 const ARCADE_PX_PER_MIL = 18; // pixels spanned by 1 MIL at "1x" in arcade mode
 const NOMINAL_CSS_PX_PER_MM = 96 / 25.4; // CSS reference pixel, before calibration
 
@@ -164,7 +187,10 @@ export class ScopeEngine {
     this.target = scenario.target;
     this.distance = scenario.distance;
     this.targetOffsetMILX = scenario.offsetX || 0;
-    this.targetOffsetMILY = scenario.offsetY || 0;
+    // The target stands on the ground plane: its base is EYE_HEIGHT_M below eye
+    // level at its distance, so it sits in front of the scenery behind it.
+    const milH = scenario.target ? (scenario.target.height * 1000) / scenario.distance : 0;
+    this.targetOffsetMILY = -(EYE_HEIGHT_M * 1000) / scenario.distance + milH / 2;
     this.environment = scenario.environment || 'field';
     this.truthOverlay = false;
 
@@ -189,7 +215,7 @@ export class ScopeEngine {
     if (!Number.isFinite(zoomLevel)) return;
     this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, zoomLevel));
     if (this.hudElement) {
-      this.hudElement.textContent = `${this.zoom.toFixed(1)}X MAG`;
+      this.hudElement.textContent = `${this.zoom.toFixed(1)}×`;
     }
     this.updateZoomButtonsUI();
     this.requestRender({ reticle: true });
@@ -284,8 +310,15 @@ export class ScopeEngine {
     const dpr = this.dpr || 1;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-    // 1. Environmental background
-    this.renderBackground(width, height);
+    // 1. Environmental background (a flat colour in measurement mode, used by the
+    //    browser tests to measure the rendered target in pixels).
+    if (this.measurementMode) {
+      this.scene = this.computeSceneTransform(width, height);
+      this.ctx.fillStyle = '#ff00ff';
+      this.ctx.fillRect(0, 0, width, height);
+    } else {
+      this.renderBackground(width, height);
+    }
 
     // 2. Target in FFP perspective: size in MIL = size(m) x 1000 / distance(m)
     if (this.target) {
@@ -302,7 +335,7 @@ export class ScopeEngine {
 
       // Ground shadow first and entirely below the base, so it never darkens the
       // bottom edge the shooter mills against (audit UI-005).
-      const shadowRy = Math.max(1, targetPxHeight * 0.05);
+      const shadowRy = this.measurementMode ? 0 : Math.max(1, targetPxHeight * 0.05);
       this.ctx.fillStyle = 'rgba(0,0,0,0.28)';
       this.ctx.beginPath();
       this.ctx.ellipse(
@@ -311,7 +344,7 @@ export class ScopeEngine {
         targetPxWidth / 2, shadowRy,
         0, 0, Math.PI * 2
       );
-      this.ctx.fill();
+      if (shadowRy > 0) this.ctx.fill();
 
       const offSize = this.targetOffscreenSize;
       if (offSize) {
@@ -337,8 +370,8 @@ export class ScopeEngine {
       }
     }
 
-    // 3. Environmental overlays (Fog / Rain)
-    this.renderWeatherOverlay(width, height);
+    // 3. Environmental overlays (fog, rain, snow)
+    if (!this.measurementMode) this.renderWeatherOverlay(width, height);
   }
 
   /** Orange dimension brackets with the true MIL values (FEAT-003). */
@@ -378,379 +411,362 @@ export class ScopeEngine {
   }
 
   /**
-   * The landscape lives in the same angular (MIL) space as the target: panning the
-   * scope shifts the whole view by the same angle and magnification scales it all
-   * together, so the target stays planted on its ground instead of sliding over a
-   * static backdrop (audit UI-008). Scenery is authored in "scene units" where
-   * 18 units = 1 MIL, i.e. its original 1x arcade pixel size.
+   * Physically-scaled landscape. Every scenery item has a real size in meters and a
+   * real distance, and is projected with the same rule as the target
+   * (MIL = meters x 1000 / distance), so a 20 m tree 150 m behind a deer is always
+   * far taller than the deer. The horizon is at eye level (0 MIL), objects stand on
+   * a flat ground plane below it (their base is EYE_HEIGHT_M x 1000 / distance MIL
+   * below the horizon), and panning/zooming moves everything together.
    */
   computeSceneTransform(w, h) {
     const ppm = this.pxPerMILAt();
-    const k = ppm / 18; // screen px per scene unit
     const cx = w / 2;
     const cy = h / 2;
-    let baseMIL = 0; // vertical MIL position of the ground line (the target's base)
-    if (this.target) {
-      const milH = (this.target.height * 1000) / this.distance;
-      baseMIL = this.targetOffsetMILY - milH / 2;
-    }
-    const groundY = cy - (baseMIL - this.panY) * ppm;
-    const panU = this.panX * 18;
+    const panX = this.panX;
+    const panY = this.panY;
+    const mx = (milX) => cx + (milX - panX) * ppm;
+    const my = (milY) => cy - (milY - panY) * ppm;
     return {
-      k,
-      groundY,
-      x: (u) => cx + (u - panU) * k,
-      // visible scene-unit range, padded
-      uMin: panU - (cx / k) - 60,
-      uMax: panU + (cx / k) + 60
+      ppm, w, h, cx, cy,
+      mx, my,
+      horizonY: my(0),
+      halfViewMIL: Math.max(w, h) / 2 / ppm,
+      // Compatibility for weather particles: "scene units" (18 per MIL).
+      k: ppm / 18,
+      groundY: my(0),
+      x: (u) => mx(u / 18)
     };
+  }
+
+  /** Screen y of the ground at `distM` meters (flat ground, eye at EYE_HEIGHT_M). */
+  groundYAt(distM) {
+    return this.scene.my(-EYE_HEIGHT_M * 1000 / distM);
   }
 
   renderBackground(w, h) {
     const ctx = this.ctx;
-    let grad;
     const scene = this.scene = this.computeSceneTransform(w, h);
-    // Sky/ground gradient follows the ground line vertically (the sky itself has no
-    // features, so it doesn't need to scale with magnification).
-    const g0 = scene.groundY - h * 0.55;
-    const g1 = scene.groundY + h * 0.45;
+    const style = ENV_STYLES[this.environment] || ENV_STYLES.forest;
+    const d = this.distance || 300;
+    const horizonY = scene.horizonY;
 
-    switch (this.environment) {
-      case 'snow':
-        grad = ctx.createLinearGradient(0, g0, 0, g1);
-        grad.addColorStop(0, '#c4d7e6');
-        grad.addColorStop(0.5, '#e8f1f5');
-        grad.addColorStop(1, '#a8b9cc');
-        break;
-
-      case 'desert':
-        grad = ctx.createLinearGradient(0, g0, 0, g1);
-        grad.addColorStop(0, '#e5be90');
-        grad.addColorStop(0.5, '#c99e69');
-        grad.addColorStop(1, '#8f6838');
-        break;
-
-      case 'mountain':
-        grad = ctx.createLinearGradient(0, g0, 0, g1);
-        grad.addColorStop(0, '#4a6572');
-        grad.addColorStop(0.6, '#344955');
-        grad.addColorStop(1, '#1d2731');
-        break;
-
-      case 'urban':
-        grad = ctx.createLinearGradient(0, g0, 0, g1);
-        grad.addColorStop(0, '#4f5b66');
-        grad.addColorStop(0.5, '#353d42');
-        grad.addColorStop(1, '#1c2226');
-        break;
-
-      case 'dusk':
-        grad = ctx.createLinearGradient(0, g0, 0, g1);
-        grad.addColorStop(0, '#4a2545');
-        grad.addColorStop(0.4, '#994636');
-        grad.addColorStop(1, '#2d1829');
-        break;
-
-      case 'field':
-        grad = ctx.createLinearGradient(0, g0, 0, g1);
-        grad.addColorStop(0, '#a9c47a');
-        grad.addColorStop(0.5, '#7fa350');
-        grad.addColorStop(1, '#4c6b2e');
-        break;
-
-      case 'range':
-        grad = ctx.createLinearGradient(0, g0, 0, g1);
-        grad.addColorStop(0, '#b0ac9c');
-        grad.addColorStop(0.5, '#8d8874');
-        grad.addColorStop(1, '#5c5847');
-        break;
-
-      case 'fog':
-        grad = ctx.createLinearGradient(0, g0, 0, g1);
-        grad.addColorStop(0, '#c7cfd2');
-        grad.addColorStop(0.5, '#aab4b8');
-        grad.addColorStop(1, '#8b969a');
-        break;
-
-      case 'rain':
-        grad = ctx.createLinearGradient(0, g0, 0, g1);
-        grad.addColorStop(0, '#3d4a56');
-        grad.addColorStop(0.5, '#2b3540');
-        grad.addColorStop(1, '#171d24');
-        break;
-
-      case 'forest':
-      default:
-        grad = ctx.createLinearGradient(0, g0, 0, g1);
-        grad.addColorStop(0, '#668265');
-        grad.addColorStop(0.5, '#40523e');
-        grad.addColorStop(1, '#233022');
-        break;
+    // Sky: gradient ending at the horizon.
+    if (horizonY > 0) {
+      const sky = ctx.createLinearGradient(0, horizonY - Math.max(h, 30 * scene.ppm), 0, horizonY);
+      sky.addColorStop(0, style.sky[0]);
+      sky.addColorStop(1, style.sky[1]);
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, w, Math.min(h, horizonY));
+    }
+    // Ground: lighter/hazier at the horizon, darker towards the shooter.
+    if (horizonY < h) {
+      const nearY = Math.max(horizonY + 2, this.groundYAt(Math.max(5, d * 0.4)));
+      const ground = ctx.createLinearGradient(0, horizonY, 0, nearY);
+      ground.addColorStop(0, style.ground[0]);
+      ground.addColorStop(1, style.ground[1]);
+      ctx.fillStyle = ground;
+      ctx.fillRect(0, Math.max(0, horizonY), w, h - Math.max(0, horizonY));
     }
 
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, w, h);
+    // Everything else is drawn far-to-near so nearer things overlap farther ones.
+    const items = [];
+    this.buildEnvironmentLayers(items, d);
+    this.buildGroundTexture(items, d, style);
+    items.sort((a, b) => b.dist - a.dist);
+    for (const item of items) item.draw();
+  }
 
-    // Ground below the ground line, anchored to the target's base.
-    const horizonY = scene.groundY;
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    if (horizonY < h) ctx.fillRect(0, Math.max(0, horizonY), w, h - Math.max(0, horizonY));
+  /** Iterates items spaced `spacingM` apart along a line `distM` meters away. */
+  forEachInLayer(distM, spacingM, salt, marginMIL, fn) {
+    const mPerMIL = distM / 1000;
+    const half = this.scene.halfViewMIL + marginMIL;
+    const first = Math.floor(((this.panX - half) * mPerMIL) / spacingM) - 1;
+    const last = Math.ceil(((this.panX + half) * mPerMIL) / spacingM) + 1;
+    if (last - first > 2500) return; // far too dense to see at this scale
+    for (let i = first; i <= last; i++) {
+      const seed = this.detailSeed(i, salt);
+      const xM = (i + seed * 0.8) * spacingM;
+      fn(xM / mPerMIL, seed, i);
+    }
+  }
 
-    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-    ctx.lineWidth = 1;
+  buildEnvironmentLayers(items, d) {
+    const add = (dist, draw) => items.push({ dist, draw });
+    const trees = (dist, spacing, minH, maxH, color, salt, alpha = 1) =>
+      add(dist, () => this.drawTreeLayer(dist, spacing, minH, maxH, color, salt, alpha));
+
+    switch (this.environment) {
+      case 'forest':
+        trees(d + 170, 4, 18, 28, '#2b3b27', 31, 0.9);
+        trees(d + 70, 4.5, 16, 26, '#18241a', 32);
+        break;
+      case 'field':
+        trees(d + 600, 9, 12, 20, '#4b5f40', 41, 0.75);
+        trees(d + 1400, 7, 14, 22, '#6d8061', 42, 0.6);
+        break;
+      case 'snow':
+        trees(d + 250, 5, 14, 24, '#2f3e34', 51, 0.85);
+        break;
+      case 'mountain':
+        add(9000, () => this.drawRidge(9000, 450, 300, 900, '#6a8193', 61));
+        add(4500, () => this.drawRidge(4500, 220, 120, 420, '#46564f', 62));
+        trees(d + 300, 6, 10, 18, '#25321f', 63);
+        break;
+      case 'desert':
+        add(3000, () => this.drawRidge(3000, 160, 20, 70, '#bb9160', 71));
+        add(1200, () => this.drawRidge(1200, 90, 6, 18, '#a97f4f', 72));
+        break;
+      case 'urban':
+        add(d + 260, () => this.drawBuildings(d + 260, 81, '#2a3036', 0.85));
+        add(d + 90, () => this.drawBuildings(d + 90, 82, '#14181c', 1));
+        break;
+      case 'range':
+        trees(d + 450, 7, 12, 20, '#556347', 91, 0.7);
+        add(d + 20, () => this.drawBerm(d + 20));
+        break;
+      case 'fog':
+        trees(d + 120, 5, 14, 24, 'rgba(70,80,76,0.75)', 101);
+        break;
+      case 'rain':
+        trees(d + 130, 4.5, 15, 25, '#18221a', 111);
+        break;
+      case 'dusk':
+        add(1e9, () => this.drawSun());
+        add(6000, () => this.drawRidge(6000, 300, 150, 450, '#3a2340', 121));
+        trees(d + 220, 5, 14, 24, '#140c12', 122);
+        break;
+    }
+  }
+
+  /** Grass tufts / pebbles / snow / pavement joints spread over distance for depth. */
+  buildGroundTexture(items, d, style) {
+    const near = Math.max(4, d * 0.35);
+    const far = Math.min(d * 4, d + 800);
+    for (let r = near, row = 0; r < far; r *= 1.07, row++) {
+      const dist = r;
+      const rowIndex = row;
+      items.push({ dist, draw: () => this.drawGroundRow(dist, rowIndex, style) });
+    }
+  }
+
+  drawGroundRow(dist, row, style) {
+    const y = this.groundYAt(dist);
+    if (y < -5 || y > this.scene.h + 40) return;
+    const ctx = this.ctx;
+    const { mx, ppm } = this.scene;
+    const milPerM = 1000 / dist;
+    // Rows well in front of the target are out of focus at this magnification, so
+    // they fade; rows around and behind the target are crisp but understated.
+    const d = this.distance || dist;
+    const focus = dist >= d ? 1 : Math.max(0, (dist / d - 0.35) / 0.65);
+    ctx.save();
+    ctx.globalAlpha = 0.25 + 0.55 * focus;
+    ctx.strokeStyle = style.texColor;
+    ctx.fillStyle = style.texColor;
+    ctx.lineWidth = Math.max(0.8, Math.min(2.2, 0.03 * milPerM * ppm));
     ctx.beginPath();
-    ctx.moveTo(0, horizonY);
-    ctx.lineTo(w, horizonY);
-    ctx.stroke();
-
-    this.renderEnvironmentDetail(w, h, horizonY);
+    this.forEachInLayer(dist, 1.3, 200 + row, 1, (xMIL, seed) => {
+      const x = mx(xMIL);
+      const yy = y + (seed - 0.5) * 0.25 * milPerM * ppm * 0.2;
+      const size = (0.1 + seed * 0.22) * milPerM * ppm;
+      if (size < 0.8) return;
+      switch (style.tex) {
+        case 'pebble': {
+          // Small stones: a fraction of the tuft size, flattened by perspective.
+          const ps = size * 0.35;
+          ctx.moveTo(x + ps, yy);
+          ctx.ellipse(x, yy, ps, ps * 0.35, 0, 0, Math.PI * 2);
+          break;
+        }
+        case 'snow':
+          ctx.moveTo(x - size * 0.6, yy);
+          ctx.quadraticCurveTo(x, yy - size * 0.35, x + size * 0.6, yy);
+          break;
+        case 'pavement':
+          ctx.moveTo(x - size, yy);
+          ctx.lineTo(x + size, yy);
+          break;
+        default: // grass tuft
+          ctx.moveTo(x - size * 0.25, yy);
+          ctx.lineTo(x - size * 0.35, yy - size);
+          ctx.moveTo(x, yy);
+          ctx.lineTo(x + size * 0.05, yy - size * 1.2);
+          ctx.moveTo(x + size * 0.25, yy);
+          ctx.lineTo(x + size * 0.4, yy - size * 0.9);
+      }
+    });
+    if (style.tex === 'pebble') ctx.fill(); else ctx.stroke();
+    ctx.restore();
   }
 
-  /**
-   * Simple procedural detail (tree lines, ridgelines, a skyline, etc.) so each
-   * environment reads as more than a flat gradient. Kept at/below the horizon
-   * line so it doesn't compete with the reticle or target for attention.
-   */
-  renderEnvironmentDetail(w, h, horizonY) {
-    switch (this.environment) {
-      case 'forest':
-        this.drawTreeLine(w, horizonY, 9, '#151f13', 1.0, 40, 62);
-        this.drawTreeLine(w, horizonY, 14, '#1c2818', 0.9, 26, 42);
-        break;
-
-      case 'field':
-        this.drawTreeLine(w, horizonY, 7, '#3a4a2e', 0.45, 26, 40);
-        this.drawFenceLine(w, horizonY);
-        break;
-
-      case 'snow':
-        this.drawTreeLine(w, horizonY, 10, '#26352a', 0.6, 24, 42);
-        this.drawSnowfall(w, h);
-        break;
-
-      case 'mountain':
-        this.drawRidgeline(w, horizonY, '#26333c', 0.85, 0.32, 1);
-        this.drawRidgeline(w, horizonY, '#18232b', 0.55, 0.55, 2);
-        break;
-
-      case 'desert':
-        this.drawRidgeline(w, horizonY, '#a9814f', 0.4, 0.35, 3);
-        this.drawScrub(w, horizonY);
-        break;
-
-      case 'urban':
-        this.drawSkyline(w, horizonY);
-        break;
-
-      case 'range':
-        this.drawRangeBerm(w, horizonY);
-        break;
-
-      case 'fog':
-        this.drawTreeLine(w, horizonY, 10, 'rgba(60,70,68,0.5)', 1.0, 28, 44);
-        break;
-
-      case 'rain':
-        this.drawTreeLine(w, horizonY, 11, '#10160f', 0.85, 26, 40);
-        break;
-
-      case 'dusk':
-        this.drawSunGlow(w, horizonY);
-        this.drawRidgeline(w, horizonY, '#1a1224', 0.5, 0.32, 4);
-        break;
-    }
-  }
-
-  /** Deterministic pseudo-random in [0,1) — stable across repeated render() calls
-   *  (panning/zooming) so environment detail doesn't reshuffle/flicker every frame. */
+  /** Deterministic pseudo-random in [0,1): stable across renders so detail doesn't flicker. */
   detailSeed(i, salt = 0) {
     const x = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
     return x - Math.floor(x);
   }
 
-  /** Indices of repeating scenery items with spacing `spacingU` that are on screen. */
-  visibleIndices(spacingU) {
-    const { uMin, uMax } = this.scene;
-    const first = Math.floor(uMin / spacingU) - 1;
-    const last = Math.ceil(uMax / spacingU) + 1;
-    const out = [];
-    for (let i = first; i <= last && out.length < 4000; i++) out.push(i);
-    return out;
-  }
-
-  drawTreeLine(w, horizonY, count, color, alpha, minH, maxH) {
+  /**
+   * Spruce silhouettes: a jagged outline of drooping branch tiers that keeps its
+   * texture at any magnification, with a slight tone variation per tree.
+   */
+  drawTreeLayer(dist, spacingM, minH, maxH, color, salt, alpha = 1) {
     const ctx = this.ctx;
-    const { k, x } = this.scene;
+    const { mx, ppm, w, h } = this.scene;
+    const baseY = this.groundYAt(dist);
+    const milPerM = 1000 / dist;
+    const isHex = /^#[0-9a-f]{6}$/i.test(color);
     ctx.save();
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = color;
-    const spacing = 700 / count; // scene units
-    for (const i of this.visibleIndices(spacing)) {
-      const seed = this.detailSeed(i, count);
-      const treeH = (minH + seed * (maxH - minH)) * k;
-      const treeW = treeH * 0.5;
-      const cx = x(spacing * (i + 0.5) + (seed - 0.5) * spacing * 0.5);
-      if (cx + treeW < 0 || cx - treeW > w) continue;
-      const baseY = horizonY + 3 * k;
-      // Layered pine silhouette: three stacked tiers + a flat base.
+    this.forEachInLayer(dist, spacingM, salt, maxH * 0.25 * milPerM, (xMIL, seed, i) => {
+      const treeH = (minH + seed * (maxH - minH)) * milPerM * ppm;
+      const halfW = treeH * 0.2;
+      const cx = mx(xMIL);
+      if (cx + halfW < 0 || cx - halfW > w || baseY - treeH > h || treeH < 1.5) return;
+      ctx.fillStyle = isHex ? shadeHex(color, (this.detailSeed(i, salt + 5) - 0.5) * 22) : color;
+      const tiers = 11;
+      const trunk = treeH * 0.05;
+      const left = [];
+      const right = [];
+      for (let k = 0; k <= tiers; k++) {
+        const f = k / tiers;                       // 0 at the tip, 1 at the bottom
+        const y = baseY - trunk - (treeH - trunk) * (1 - f);
+        const jag = 0.82 + this.detailSeed(i * 31 + k, salt + 9) * 0.36;
+        const wTier = halfW * Math.pow(f, 0.9) * jag;
+        // branch tip droops below the tier line; the notch sits above it
+        left.push([cx - wTier, y + treeH * 0.018], [cx - wTier * 0.45, y - treeH * 0.012]);
+        right.push([cx + wTier, y + treeH * 0.018], [cx + wTier * 0.45, y - treeH * 0.012]);
+      }
       ctx.beginPath();
       ctx.moveTo(cx, baseY - treeH);
-      ctx.lineTo(cx - treeW * 0.35, baseY - treeH * 0.62);
-      ctx.lineTo(cx - treeW * 0.18, baseY - treeH * 0.62);
-      ctx.lineTo(cx - treeW * 0.48, baseY - treeH * 0.3);
-      ctx.lineTo(cx - treeW * 0.22, baseY - treeH * 0.3);
-      ctx.lineTo(cx - treeW * 0.5, baseY);
-      ctx.lineTo(cx + treeW * 0.5, baseY);
-      ctx.lineTo(cx + treeW * 0.22, baseY - treeH * 0.3);
-      ctx.lineTo(cx + treeW * 0.48, baseY - treeH * 0.3);
-      ctx.lineTo(cx + treeW * 0.18, baseY - treeH * 0.62);
-      ctx.lineTo(cx + treeW * 0.35, baseY - treeH * 0.62);
+      right.forEach(([x, y]) => ctx.lineTo(x, y));
+      ctx.lineTo(cx + treeH * 0.012, baseY - trunk);
+      ctx.lineTo(cx + treeH * 0.012, baseY);
+      ctx.lineTo(cx - treeH * 0.012, baseY);
+      ctx.lineTo(cx - treeH * 0.012, baseY - trunk);
+      for (let k = left.length - 1; k >= 0; k--) ctx.lineTo(left[k][0], left[k][1]);
       ctx.closePath();
       ctx.fill();
-    }
+    });
     ctx.restore();
   }
 
-  drawRidgeline(w, horizonY, color, alpha, heightFactor, salt) {
+  /** Mountain / dune silhouette at `dist` meters, peak heights in meters. */
+  drawRidge(dist, spacingM, minH, maxH, color, salt) {
     const ctx = this.ctx;
-    const { k, x } = this.scene;
+    const { mx, ppm, w } = this.scene;
+    const baseY = this.groundYAt(dist);
+    const milPerM = 1000 / dist;
+    const pts = [];
+    this.forEachInLayer(dist, spacingM, salt, spacingM * milPerM * 2, (xMIL, seed) => {
+      pts.push([mx(xMIL), baseY - (minH + seed * (maxH - minH)) * milPerM * ppm]);
+    });
+    if (pts.length < 2) return;
     ctx.save();
-    ctx.globalAlpha = alpha;
     ctx.fillStyle = color;
-    const spacing = 700 / 6;
-    const maxPeakH = 385 * heightFactor * k;
-    const idx = this.visibleIndices(spacing);
     ctx.beginPath();
-    ctx.moveTo(x(idx[0] * spacing), horizonY);
-    for (const i of idx) {
-      const seed = this.detailSeed(i, salt);
-      ctx.lineTo(x(i * spacing), horizonY - maxPeakH * (0.35 + seed * 0.65));
-    }
-    ctx.lineTo(x(idx[idx.length - 1] * spacing), horizonY);
+    ctx.moveTo(Math.min(0, pts[0][0]), baseY + 2);
+    pts.forEach(([x, y]) => ctx.lineTo(x, y));
+    ctx.lineTo(Math.max(w, pts[pts.length - 1][0]), baseY + 2);
     ctx.closePath();
     ctx.fill();
     ctx.restore();
   }
 
-  drawSkyline(w, horizonY) {
+  drawBuildings(dist, salt, color, alpha) {
     const ctx = this.ctx;
-    const { k, x } = this.scene;
+    const { mx, ppm, w, h } = this.scene;
+    const baseY = this.groundYAt(dist);
+    const k = (1000 / dist) * ppm; // screen px per meter at this distance
     ctx.save();
-    const spacing = 700 / 12;
-    for (const i of this.visibleIndices(spacing)) {
-      const seed = this.detailSeed(i, 9);
-      const bH = (20 + seed * 55) * k;
-      const bW = spacing * 0.7 * k;
-      const bx = x(spacing * i + spacing * 0.15);
-      if (bx + bW < 0 || bx > w) continue;
-      const y = horizonY - bH;
-      ctx.fillStyle = '#12161a';
-      ctx.fillRect(bx, y, bW, bH + 4 * k);
+    ctx.globalAlpha = alpha;
+    this.forEachInLayer(dist, 24, salt, 30 * 1000 / dist, (xMIL, seed, i) => {
+      const bW = (14 + seed * 10) * k;
+      const bH = (12 + this.detailSeed(i, salt + 1) * 28) * k;
+      const left = mx(xMIL) - bW / 2;
+      if (left + bW < 0 || left > w || baseY - bH > h) return;
+      ctx.fillStyle = color;
+      ctx.fillRect(left, baseY - bH, bW, bH);
+      // Windows: 1.2 x 1.5 m, one floor every 3.2 m, every 3 m across.
+      if (k * 1.2 < 1.5) return;
       ctx.fillStyle = 'rgba(255, 200, 120, 0.5)';
-      // Window grid in scene units so it scales with the building.
-      for (let wy = 6; wy < bH / k - 4; wy += 8) {
-        for (let wx = 4; wx < bW / k - 4; wx += 7) {
-          if (Math.abs(Math.sin((i * 97 + wx) * 12.9 + wy * 78.2)) > 0.55) {
-            ctx.fillRect(bx + wx * k, y + wy * k, 2 * k, 3 * k);
+      for (let fy = 1.2; fy + 1.5 < bH / k - 0.5; fy += 3.2) {
+        for (let fx = 1.2; fx + 1.2 < bW / k - 0.8; fx += 3) {
+          if (this.detailSeed(i * 131 + Math.round(fx * 7) + Math.round(fy * 13), salt + 2) > 0.45) {
+            const wx = left + fx * k;
+            const wy = baseY - (fy + 1.5) * k;
+            if (wx > w || wx + 1.2 * k < 0 || wy > h || wy + 1.5 * k < 0) continue;
+            ctx.fillRect(wx, wy, 1.2 * k, 1.5 * k);
           }
         }
       }
-    }
+    });
     ctx.restore();
   }
 
-  drawFenceLine(w, horizonY) {
+  /** Earth backstop berm, 4.5 m high, behind the target. */
+  drawBerm(dist) {
     const ctx = this.ctx;
-    const { k, x } = this.scene;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(40,35,25,0.5)';
-    ctx.lineWidth = Math.max(1, 1.5 * k);
-    const postSpacing = 22;
-    const postH = 10 * k;
-    ctx.beginPath();
-    ctx.moveTo(0, horizonY - postH * 0.6);
-    ctx.lineTo(w, horizonY - postH * 0.6);
-    ctx.stroke();
-    for (const i of this.visibleIndices(postSpacing)) {
-      const px = x(i * postSpacing);
-      if (px < -5 || px > w + 5) continue;
-      ctx.beginPath();
-      ctx.moveTo(px, horizonY - postH);
-      ctx.lineTo(px, horizonY + 2 * k);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  drawScrub(w, horizonY) {
-    const ctx = this.ctx;
-    const { k, x } = this.scene;
-    ctx.save();
-    ctx.strokeStyle = 'rgba(70, 55, 30, 0.6)';
-    ctx.lineWidth = Math.max(1, 2 * k);
-    ctx.lineCap = 'round';
-    const spacing = 700 / 8;
-    for (const i of this.visibleIndices(spacing)) {
-      const seed = this.detailSeed(i, 5);
-      const sx = x(spacing * i + seed * spacing);
-      const baseY = horizonY + (4 + seed * 6) * k;
-      const armH = (6 + seed * 6) * k;
-      if (sx + armH < 0 || sx - armH > w) continue;
-      ctx.beginPath();
-      ctx.moveTo(sx, baseY);
-      ctx.lineTo(sx, baseY - armH * 1.6);
-      ctx.moveTo(sx, baseY - armH * 0.9);
-      ctx.lineTo(sx - armH * 0.5, baseY - armH * 0.9);
-      ctx.lineTo(sx - armH * 0.5, baseY - armH * 1.4);
-      ctx.moveTo(sx, baseY - armH * 1.1);
-      ctx.lineTo(sx + armH * 0.5, baseY - armH * 1.1);
-      ctx.lineTo(sx + armH * 0.5, baseY - armH * 1.6);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  drawRangeBerm(w, horizonY) {
-    const ctx = this.ctx;
-    const { k, x } = this.scene;
-    ctx.save();
-    const bermH = 34 * k;
-    const grad = ctx.createLinearGradient(0, horizonY - bermH, 0, horizonY + 6 * k);
+    const { mx, ppm, w } = this.scene;
+    const baseY = this.groundYAt(dist);
+    const k = (1000 / dist) * ppm;
+    const top = baseY - 4.5 * k;
+    const grad = ctx.createLinearGradient(0, top, 0, baseY);
     grad.addColorStop(0, '#8a7f65');
     grad.addColorStop(1, '#5c5340');
+    ctx.save();
     ctx.fillStyle = grad;
-    const spacing = 700; // one berm arc per 700 scene units
-    for (const i of this.visibleIndices(spacing)) {
-      const x0 = x(i * spacing - spacing / 2);
-      const x1 = x(i * spacing + spacing / 2);
-      if (x1 < 0 || x0 > w) continue;
-      ctx.beginPath();
-      ctx.moveTo(x0, horizonY + 6 * k);
-      ctx.quadraticCurveTo((x0 + x1) / 2, horizonY - bermH, x1, horizonY + 6 * k);
-      ctx.lineTo(x1, horizonY + 20 * k);
-      ctx.lineTo(x0, horizonY + 20 * k);
-      ctx.closePath();
-      ctx.fill();
-    }
+    ctx.beginPath();
+    ctx.moveTo(0, baseY);
+    let first = true;
+    this.forEachInLayer(dist, 6, 7, 2, (xMIL, seed) => {
+      const x = mx(xMIL);
+      const y = top + seed * 0.4 * k;
+      if (first) { ctx.lineTo(Math.min(0, x), y); first = false; }
+      ctx.lineTo(x, y);
+    });
+    ctx.lineTo(w, top);
+    ctx.lineTo(w, baseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  /** Setting sun on the horizon (true angular size ~9.3 MIL) with a glow. */
+  drawSun() {
+    const ctx = this.ctx;
+    const { mx, ppm, horizonY } = this.scene;
+    const sunX = mx(60);
+    const sunY = horizonY - 3 * ppm;
+    const R = 4.65 * ppm;
+    ctx.save();
+    const glow = ctx.createRadialGradient(sunX, sunY, R * 0.5, sunX, sunY, R * 7);
+    glow.addColorStop(0, 'rgba(255, 190, 120, 0.85)');
+    glow.addColorStop(1, 'rgba(255, 140, 60, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, R * 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 225, 180, 0.95)';
+    ctx.beginPath();
+    ctx.arc(sunX, sunY, R, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 
   /**
    * Weather particles (snow flakes, rain streaks) placed in the world on a repeating
-   * 700x700 scene-unit tile, so turning the scope moves them with everything else.
-   * Their on-screen size is capped: they are close to the shooter and would be out
-   * of focus, not magnified, at high power.
+   * tile, so turning the scope moves them with everything else. Their on-screen size
+   * is capped: they are close to the shooter and would be out of focus, not magnified.
    */
   forEachWeatherParticle(w, h, count, salt, fn) {
     const { k, x, groundY } = this.scene;
     const tile = 700;
     const pxPerTile = tile * k;
-    // Tile indices covering the screen horizontally and vertically.
     const ux0 = Math.floor((-x(0)) / pxPerTile) - 1;
     const ux1 = Math.ceil((w - x(0)) / pxPerTile) + 1;
     const vy0 = Math.floor((0 - groundY) / pxPerTile) - 1;
     const vy1 = Math.ceil((h - groundY) / pxPerTile) + 1;
-    if ((ux1 - ux0) * (vy1 - vy0) > 400) return; // extremely zoomed out: skip
+    if ((ux1 - ux0) * (vy1 - vy0) > 400) return;
     for (let tx = ux0; tx <= ux1; tx++) {
       for (let ty = vy0; ty <= vy1; ty++) {
         for (let i = 0; i < count; i++) {
@@ -763,47 +779,13 @@ export class ScopeEngine {
     }
   }
 
-  drawSnowfall(w, h) {
-    const ctx = this.ctx;
-    const size = Math.min(1, this.scene.k);
-    ctx.save();
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    this.forEachWeatherParticle(w, h, 60, 11, (px, py, r) => {
-      ctx.beginPath();
-      ctx.arc(px, py, (1 + r * 1.5) * Math.max(0.6, size) * 1.4, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    ctx.restore();
-  }
-
-  drawSunGlow(w, horizonY) {
-    const ctx = this.ctx;
-    const { k, x } = this.scene;
-    ctx.save();
-    const sunX = x(152);
-    const sunY = horizonY - 8 * k;
-    const R = 70 * k;
-    if (sunX + R < 0 || sunX - R > w) { ctx.restore(); return; }
-    const grad = ctx.createRadialGradient(sunX, sunY, 2 * k, sunX, sunY, R);
-    grad.addColorStop(0, 'rgba(255, 190, 120, 0.9)');
-    grad.addColorStop(1, 'rgba(255, 140, 60, 0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(sunX, sunY, R, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255, 225, 180, 0.95)';
-    ctx.beginPath();
-    ctx.arc(sunX, sunY, 10 * k, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-
   renderWeatherOverlay(w, h) {
     const ctx = this.ctx;
+    if (!this.scene) return;
     if (this.environment === 'fog') {
       ctx.fillStyle = 'rgba(210, 220, 225, 0.45)';
       ctx.fillRect(0, 0, w, h);
-    } else if (this.environment === 'rain' && this.scene) {
+    } else if (this.environment === 'rain') {
       const len = 16 * Math.max(0.6, Math.min(1, this.scene.k));
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
       ctx.lineWidth = 1;
@@ -813,6 +795,16 @@ export class ScopeEngine {
         ctx.lineTo(px - len / 4, py + len);
       });
       ctx.stroke();
+    } else if (this.environment === 'snow') {
+      const size = Math.max(0.6, Math.min(1, this.scene.k));
+      ctx.fillStyle = 'rgba(255,255,255,0.6)';
+      ctx.beginPath();
+      this.forEachWeatherParticle(w, h, 60, 11, (px, py, r) => {
+        const rad = (1 + r * 1.5) * size * 1.4;
+        ctx.moveTo(px + rad, py);
+        ctx.arc(px, py, rad, 0, Math.PI * 2);
+      });
+      ctx.fill();
     }
   }
 

@@ -12,6 +12,8 @@ import {
 import { diagnoseEstimate } from './coach.js';
 import { setFieldError, toast } from './ui.js';
 
+const ENV_LABELS = { forest: 'Forest', field: 'Field', snow: 'Snow', mountain: 'Mountain', desert: 'Desert', urban: 'City', range: 'Shooting range', fog: 'Fog', rain: 'Rain', dusk: 'Dusk' };
+
 const isCoarsePointer = () => window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
 
 export class TrainingManager {
@@ -184,8 +186,8 @@ export class TrainingManager {
     set('sim-target-category', s.target.category || 'Field Target');
     set('sim-target-height', formatSize(s.target.height, unit));
     set('sim-target-width', formatSize(s.target.width, unit));
-    set('sim-environment', s.environment.toUpperCase());
-    set('sim-unit-label', unit === 'imperial' ? 'YARDS' : 'METERS');
+    set('sim-environment', ENV_LABELS[s.environment] || s.environment);
+    set('sim-unit-label', unit === 'imperial' ? 'yards' : 'meters');
 
     const inputEl = document.getElementById('sim-estimated-distance');
     const milEl = document.getElementById('sim-mil-reading');
@@ -389,12 +391,12 @@ export class TrainingManager {
     const title = document.getElementById('res-title');
     if (revealed) {
       badge.className = 'badge bg-secondary fs-6 p-2';
-      badge.textContent = 'NOT SCORED';
+      badge.textContent = 'Not scored';
       if (title) title.textContent = 'Solution';
     } else {
       badge.className = `badge ${result.badgeClass} fs-6 p-2`;
       badge.textContent = `${result.score} PTS (${result.rating})`;
-      if (title) title.textContent = 'Calculation Breakdown';
+      if (title) title.textContent = 'Result';
     }
 
     document.getElementById('res-actual-dist').textContent = formatDistance(s.distance, unit, { long: true });
@@ -428,7 +430,7 @@ export class TrainingManager {
         const sign = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
         const dimLabel = diagnostics.dimension === 'height' ? 'height' : 'width';
         coachEl.innerHTML = `
-          <div class="tactical-font text-tan-accent mb-1" style="font-size:0.85rem;">COACH: WHERE DID THE ERROR COME FROM?</div>
+          <div class="fw-semibold mb-1">Where the error came from</div>
           <div>Reading: you read <strong>${diagnostics.userMil.toFixed(2)} MIL</strong> (${dimLabel}); true is ${diagnostics.trueMil.toFixed(2)} MIL → <strong>${sign(diagnostics.readingErrorPct)}</strong></div>
           <div>Maths: your reading implies ${escapeHTML(formatDistance(diagnostics.impliedMeters, unit))}; you entered ${escapeHTML(formatDistance(answer.estimateMeters, unit))} → <strong>${sign(diagnostics.mathErrorPct)}</strong></div>
           ${diagnostics.verdict ? `<div class="mt-1 text-warning">${escapeHTML(diagnostics.verdict)}</div>` : ''}

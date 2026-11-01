@@ -2,6 +2,8 @@
    Utility & Mathematical Helper Functions
    ========================================================================== */
 
+import { buildArt, ART_TYPES } from './target-art.js';
+
 export const UNITS = {
   METRIC: 'metric',
   IMPERIAL: 'imperial'
@@ -285,25 +287,14 @@ export const SHAPE_FIT = {
   swe_tunna_h: [0, 1, 100, 99],
   swe_b: [3, 1, 97, 99],
   swe_b45: [3, 1, 97, 99],
-  swe_b65: [3, 1, 97, 99],
-  prs_popper: [20.4, 0, 79.6, 100],
-  coyote: [7.2, 16.7, 81.1, 88],
-  deer: [10.5, 0.2, 78.8, 88],
-  elk: [4.5, 0, 94.9, 90],
-  moose: [3.5, 0.9, 99.1, 92],
-  reindeer: [7.5, 1, 89.8, 86],
-  bear: [2.7, 20.7, 96.8, 76],
-  boar: [6.7, 17.1, 91.9, 84],
-  wolf: [4.5, 13.8, 87.1, 88],
-  fox: [7, 23.6, 76.1, 86],
-  hare: [16.5, 8.8, 76.7, 84],
-  pheasant: [0, 26.3, 81, 79],
-  turkey: [7.4, 9.7, 77.8, 85.2]
+  swe_b65: [3, 1, 97, 99]
 };
 
 /**
  * Generate Procedural SVG graphic string for targets
  */
+let svgIdCounter = 0;
+
 export function renderTargetSVGString(target, widthPx = 120, heightPx = 120) {
   // Custom uploaded images always take priority over any placeholder svgType.
   if (target.imageData && isSafeImageDataURI(target.imageData)) {
@@ -312,8 +303,25 @@ export function renderTargetSVGString(target, widthPx = 120, heightPx = 120) {
   }
 
   const type = target.svgType || target.type || 'swe_b65';
-  const color = target.color || '#1e242b';
-  const border = target.borderColor || '#ffffff';
+
+  // Animals, people, IPSC and PRS targets are built to scale in target-art.js and
+  // carry their own exact bounding box.
+  if (ART_TYPES.has(type)) {
+    const art = buildArt(type, target);
+    return `
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="${art.viewBox}" width="${widthPx}" height="${heightPx}" preserveAspectRatio="none">
+      ${art.svg}
+    </svg>
+  `;
+  }
+
+  const color = /^#[0-9a-fA-F]{6}$/.test(target.color || '') ? target.color : '#1e242b';
+  // Field figures are matte painted shapes: a faint light edge and barely visible
+  // zone lines instead of a bright white outline.
+  const isFigure = type.startsWith('swe_');
+  // Opaque edge in a lighter tone of the paint: the visible outline must be the
+  // figure's true outline (a translucent edge reads smaller than the real size).
+  const border = isFigure ? shadeHexColor(color, 34) : (target.borderColor || '#ffffff');
 
   let innerContent = '';
 
@@ -444,12 +452,21 @@ export function renderTargetSVGString(target, widthPx = 120, heightPx = 120) {
       `;
       break;
 
-    case 'circle_gong':
+    case 'circle_gong': {
+      // Painted steel plate: soft radial shading, darker rolled edge and a few lead
+      // splashes from earlier hits (positions are fixed so the art is stable).
+      const gid = `gong${++svgIdCounter}`;
+      const splashes = [[38, 44, 3.2], [57, 52, 2.6], [47, 61, 2.2], [62, 38, 1.8], [44, 33, 1.5]]
+        .map(([x, y, r]) => `<circle cx="${x}" cy="${y}" r="${r}" fill="#8f9396" opacity="0.75"/>`).join('');
       innerContent = `
-        <circle cx="50" cy="50" r="49" fill="${color}" stroke="${border}" stroke-width="2"/>
-        <circle cx="50" cy="50" r="12" fill="none" stroke="${border}" stroke-dasharray="2 2"/>
+        <defs><radialGradient id="${gid}" cx="40%" cy="35%" r="70%">
+          <stop offset="0" stop-color="${shadeHexColor(color, 12)}"/><stop offset="1" stop-color="${shadeHexColor(color, -40)}"/>
+        </radialGradient></defs>
+        <circle cx="50" cy="50" r="49.2" fill="url(#${gid})" stroke="${shadeHexColor(color, -120)}" stroke-width="1.6"/>
+        ${splashes}
       `;
       break;
+    }
 
     case 'prs_popper':
       innerContent = `
@@ -683,6 +700,19 @@ export function renderTargetSVGString(target, widthPx = 120, heightPx = 120) {
     default:
       innerContent = `<rect x="1" y="1" width="98" height="98" fill="${color}" stroke="${border}" stroke-width="2"/>`;
       break;
+  }
+
+  // Matte finish for field figures: a gentle top-to-bottom gradient of the paint
+  // colour instead of a flat fill.
+  if (isFigure) {
+    const fid = `fig${++svgIdCounter}`;
+    innerContent = `<defs><linearGradient id="${fid}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${shadeHexColor(color, 16)}"/><stop offset="1" stop-color="${shadeHexColor(color, -10)}"/>
+      </linearGradient></defs>` + innerContent
+      .split(`fill="${color}"`).join(`fill="url(#${fid})"`)
+      // zone lines and centre marks stay faint
+      .split(`fill="none" stroke="${border}"`).join(`fill="none" stroke="${border}" stroke-opacity="0.45"`)
+      .split(`fill="${border}"/>`).join(`fill="${border}" fill-opacity="0.45"/>`);
   }
 
   // Shapes drawn with margins inside the 100x100 design box are mapped so their

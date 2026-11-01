@@ -7,6 +7,7 @@ import {
   buildScenario, createRng, formatDistance, formulaLine, DISTANCE_BANDS, MIN_SCENARIO_DISTANCE_M
 } from '../js/scenario-logic.js';
 import { metersToYards } from '../js/utils.js';
+import { formatSize } from '../js/scenario-logic.js';
 
 const builtIns = JSON.parse(readFileSync(new URL('../data/targets.json', import.meta.url)));
 const custom = { id: 'custom_x', name: 'Mine', category: 'Steel', width: 0.3, height: 0.3, isBuiltIn: false };
@@ -94,5 +95,22 @@ test('formula arithmetic reproduces the distance at short and long range', () =>
   for (const [size, d] of [[0.036, 37], [0.45, 300], [1.8, 1173]]) {
     const line = formulaLine(size, d, 'metric', 'H');
     assert.match(line, new RegExp(`= ${d} m$`), line);
+  }
+});
+
+test('known sizes are shown without misleading rounding', () => {
+  assert.equal(formatSize(0.036, 'metric'), '36 mm');
+  assert.equal(formatSize(0.225, 'metric'), '22.5 cm');
+  assert.equal(formatSize(0.65, 'metric'), '65 cm');
+  assert.equal(formatSize(1.638, 'metric'), '1.638 m');
+  assert.equal(formatSize(0.036, 'imperial'), '1.42 in');
+  // Every built-in target: the displayed value must be within 0.5% of the true size.
+  for (const t of builtIns) {
+    for (const v of [t.height, t.width]) {
+      const shown = formatSize(v, 'metric');
+      const [num, u] = shown.split(' ');
+      const meters = Number(num) / ({ mm: 1000, cm: 100, m: 1 })[u];
+      assert.ok(Math.abs(meters - v) / v < 0.005, `${t.id}: ${v} shown as ${shown}`);
+    }
   }
 });

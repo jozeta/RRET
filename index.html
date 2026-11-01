@@ -9,7 +9,7 @@
   <!-- Content-Security-Policy (SEC-003). Everything is self-hosted (SEC-002 / FEAT-008);
        'unsafe-inline' for styles only covers a few style="" attributes. -->
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
-  <meta name="theme-color" content="#0b0d0f">
+  <meta name="theme-color" content="#18201d">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -18,12 +18,13 @@
   <link rel="stylesheet" href="vendor/bootstrap/bootstrap.min.css">
   <link rel="stylesheet" href="vendor/bootstrap-icons/bootstrap-icons.min.css">
   <link rel="stylesheet" href="vendor/fonts/fonts.css">
-  <link rel="preload" href="vendor/fonts/Inter-c940764593.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="vendor/fonts/Archivo-latin-4c98b9d490.woff2" as="font" type="font/woff2" crossorigin>
 
   <!-- Application CSS Stylesheets -->
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="css/scope.css">
   <link rel="stylesheet" href="css/learn.css">
+  <link rel="stylesheet" href="css/theme.css">
 </head>
 <body class="theme-dark-tactical">
 
@@ -90,43 +91,47 @@
     <section id="page-home" class="page-view active">
       <div class="row align-items-center mb-5 hero-section py-4">
         <div class="col-lg-7 mb-4 mb-lg-0">
-          <span class="badge badge-olive mb-2">PRECISION RANGE ESTIMATION ENGINE</span>
-          <h1 class="display-4 text-tan-light mb-3">Master MIL Range Estimation</h1>
+          <h1 class="display-4 mb-3 hero-title">Learn to read distance from your reticle</h1>
           <p class="lead text-muted mb-4">
-            Simulate realistic field shooting situations using First Focal Plane (FFP) optics. Calculate distances to Swedish field shooting targets, steel gongs, PRS silhouettes, and game animals with accurate MIL reticle subtensions.
+            A first focal plane scope simulator with Swedish field-shooting figures, steel, IPSC targets and game animals, all drawn to true size. Measure the target in MILs, work out the range, and see exactly where an estimate went wrong.
           </p>
-          <div class="d-flex flex-wrap gap-3">
-            <button class="btn btn-tactical btn-tactical-primary btn-lg" data-page-target="simulator">
-              <i class="bi bi-play-circle-fill"></i> Launch Training Simulator
-            </button>
-            <button class="btn btn-tactical btn-tactical-outline btn-lg" data-page-target="learn">
-              <i class="bi bi-mortarboard-fill"></i> Learn MIL Estimation
-            </button>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-tactical btn-tactical-primary btn-lg" data-page-target="simulator">Start practising</button>
+            <button type="button" class="btn btn-tactical btn-tactical-outline btn-lg" data-page-target="learn">How MIL ranging works</button>
           </div>
         </div>
-        <div class="col-lg-5 text-center">
-          <div class="card-tactical p-4 position-relative">
-            <div class="ratio ratio-1x1 mx-auto" style="max-width:320px;">
-              <svg viewBox="0 0 200 200">
-                <circle cx="100" cy="100" r="95" fill="#0b0d0f" stroke="#c9a572" stroke-width="4"/>
-                <circle cx="100" cy="100" r="85" fill="none" stroke="#526348" stroke-width="1"/>
-                <!-- Reticle SVG Demo -->
-                <line x1="20" y1="100" x2="180" y2="100" stroke="#ff8c00" stroke-width="1.5"/>
-                <line x1="100" y1="20" x2="100" y2="180" stroke="#ff8c00" stroke-width="1.5"/>
-                <!-- Target B65 preview inside -->
-                <polygon points="90,75 110,75 115,85 115,115 85,115 85,85" fill="#1e242b" stroke="#ffffff" stroke-width="1.5"/>
-                <!-- Dots -->
-                <circle cx="70" cy="100" r="2.5" fill="#ff8c00"/>
-                <circle cx="130" cy="100" r="2.5" fill="#ff8c00"/>
-                <circle cx="100" cy="70" r="2.5" fill="#ff8c00"/>
-                <circle cx="100" cy="130" r="2.5" fill="#ff8c00"/>
-              </svg>
-            </div>
-            <div class="mt-3">
-              <h5 class="tactical-font text-tan-light mb-1">First Focal Plane (FFP) Reticle</h5>
-              <p class="small text-muted mb-0">Reticle & target subtensions scale in perfect parity across 1x to 25x magnification.</p>
-            </div>
-          </div>
+        <div class="col-lg-5">
+          <figure class="hero-scope mb-0">
+            <svg viewBox="0 0 320 320" role="img" aria-label="Scope view of a field-shooting figure in front of a treeline">
+              <defs>
+                <clipPath id="heroLens"><circle cx="160" cy="160" r="146"/></clipPath>
+                <linearGradient id="heroSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fb6c2"/><stop offset="1" stop-color="#d9e3e2"/></linearGradient>
+                <linearGradient id="heroGround" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7f9a4c"/><stop offset="1" stop-color="#40592a"/></linearGradient>
+                <linearGradient id="heroFig" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#30363d"/><stop offset="1" stop-color="#15191d"/></linearGradient>
+                <radialGradient id="heroVignette" cx="50%" cy="50%" r="50%"><stop offset="0.78" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity="0.55"/></radialGradient>
+              </defs>
+              <circle cx="160" cy="160" r="158" fill="#0f1513"/>
+              <g clip-path="url(#heroLens)">
+                <rect width="320" height="190" fill="url(#heroSky)"/>
+                <rect y="182" width="320" height="140" fill="url(#heroGround)"/>
+                <path d="M0 186 L8 150 L16 186 L22 140 L32 186 L40 156 L48 186 L56 132 L68 186 L76 148 L86 186 L94 138 L104 186 L114 154 L122 186 L232 186 L240 150 L250 186 L258 136 L268 186 L278 146 L288 186 L296 128 L308 186 L314 150 L320 186 L320 190 L0 190 Z" fill="#26372a"/>
+                <ellipse cx="160" cy="224" rx="23" ry="2.5" fill="#000" opacity="0.25"/>
+                <!-- B 65 figure (50 x 65 cm) at 325 m: 1.54 x 2.00 MIL = 46 x 60 px at 30 px/MIL -->
+                <path transform="matrix(0.7931 0 0 0.96774 33.103 7.161)" d="M160 160 C171 160 176 171 173 179 C184 184 189 195 189 207 L189 222 L131 222 L131 207 C131 195 136 184 147 179 C144 171 149 160 160 160 Z" fill="url(#heroFig)"/>
+                <rect width="320" height="320" fill="url(#heroVignette)"/>
+              </g>
+              <g stroke="#e5484d" stroke-linecap="round" fill="#e5484d">
+                <line x1="14" y1="160" x2="306" y2="160" stroke-width="1.4"/>
+                <line x1="160" y1="14" x2="160" y2="306" stroke-width="1.4"/>
+                <circle cx="100" cy="160" r="3" stroke="none"/><circle cx="130" cy="160" r="3" stroke="none"/>
+                <circle cx="190" cy="160" r="3" stroke="none"/><circle cx="220" cy="160" r="3" stroke="none"/>
+                <circle cx="160" cy="100" r="3" stroke="none"/><circle cx="160" cy="130" r="3" stroke="none"/>
+                <circle cx="160" cy="190" r="3" stroke="none"/><circle cx="160" cy="220" r="3" stroke="none"/>
+              </g>
+              <circle cx="160" cy="160" r="146" fill="none" stroke="#2f3a35" stroke-width="3"/>
+            </svg>
+            <figcaption class="small text-muted mt-3">This B 65 figure is 65 cm tall and measures 2 MIL, so it stands 650 ÷ 2 = 325 m away.</figcaption>
+          </figure>
         </div>
       </div>
 
@@ -134,35 +139,35 @@
       <div class="row g-3 mb-5">
         <div class="col-6 col-md-4 col-lg">
           <div class="stat-box">
-            <div class="stat-label">ROUNDS COMPLETED</div>
+            <div class="stat-label">Rounds completed</div>
             <div class="stat-value text-tan-light" id="stat-rounds-played">0</div>
             <div class="stat-subtext">Total scenarios solved</div>
           </div>
         </div>
         <div class="col-6 col-md-4 col-lg">
           <div class="stat-box highlight">
-            <div class="stat-label">BEST SCORE</div>
+            <div class="stat-label">Best score</div>
             <div class="stat-value text-orange-highlight" id="stat-best-score">0</div>
             <div class="stat-subtext">Personal high score</div>
           </div>
         </div>
         <div class="col-6 col-md-4 col-lg">
           <div class="stat-box">
-            <div class="stat-label">AVERAGE ERROR</div>
+            <div class="stat-label">Average error</div>
             <div class="stat-value text-main" id="stat-avg-error">0%</div>
             <div class="stat-subtext">Deviation percentage</div>
           </div>
         </div>
         <div class="col-6 col-md-6 col-lg">
           <div class="stat-box">
-            <div class="stat-label">ACCURACY RATE</div>
+            <div class="stat-label">Accuracy (100 − mean error)</div>
             <div class="stat-value text-success" id="stat-accuracy-pct">0%</div>
             <div class="stat-subtext">Overall precision score</div>
           </div>
         </div>
         <div class="col-6 col-md-6 col-lg">
           <div class="stat-box">
-            <div class="stat-label">BEST ACCURACY</div>
+            <div class="stat-label">Best running accuracy</div>
             <div class="stat-value text-success" id="stat-best-accuracy">0%</div>
             <div class="stat-subtext">Personal best precision</div>
           </div>
@@ -172,21 +177,21 @@
       <!-- RECENT TRAINING HISTORY TABLE -->
       <div class="card-tactical mb-4">
         <div class="card-header-tactical">
-          <h4 class="card-title-tactical"><i class="bi bi-clock-history"></i> Recent Training History</h4>
-          <button class="btn btn-sm btn-tactical-outline" data-page-target="simulator">New Practice</button>
+          <h2 class="card-title-tactical h5 mb-0">Recent rounds</h2>
+          <button type="button" class="btn btn-sm btn-tactical-outline" data-page-target="simulator">Practise</button>
         </div>
         <div class="card-body p-0">
           <div class="table-responsive">
             <table class="table table-dark table-hover mb-0 align-middle">
               <thead>
                 <tr class="text-muted tactical-font" style="font-size:0.85rem;">
-                  <th scope="col">WHEN</th>
-                  <th scope="col">TARGET</th>
-                  <th scope="col">ACTUAL DISTANCE</th>
-                  <th scope="col">ESTIMATED</th>
-                  <th scope="col">ERROR</th>
-                  <th scope="col">DURATION</th>
-                  <th scope="col">SCORE</th>
+                  <th scope="col">When</th>
+                  <th scope="col">Target</th>
+                  <th scope="col">Actual</th>
+                  <th scope="col">Your estimate</th>
+                  <th scope="col">Error</th>
+                  <th scope="col">Time</th>
+                  <th scope="col">Score</th>
                 </tr>
               </thead>
               <tbody id="history-table-body">
@@ -200,7 +205,7 @@
       <!-- PROGRESS ANALYTICS (FEAT-006) -->
       <div class="card-tactical mb-4">
         <div class="card-header-tactical">
-          <h4 class="card-title-tactical"><i class="bi bi-graph-up" aria-hidden="true"></i> Progress Analytics</h4>
+          <h2 class="card-title-tactical h5 mb-0">Progress</h2>
           <button type="button" class="btn btn-sm btn-tactical-outline" id="btn-export-history-csv"><i class="bi bi-download" aria-hidden="true"></i> Export CSV</button>
         </div>
         <div class="card-body" id="analytics-container"></div>
@@ -230,8 +235,8 @@
                   <canvas id="scope-canvas" class="scope-canvas"></canvas>
                   <div id="scope-reticle-svg" class="scope-reticle-svg" aria-hidden="true"></div>
                   <div class="scope-lens-overlay" aria-hidden="true"></div>
-                  <div class="scope-hud-badge" id="scope-hud-mag" aria-live="off">1.0X MAG</div>
-                  <div class="scope-hud-crosshair-center" id="scope-hud-hint">PAN: DRAG / ARROWS | ZOOM: WHEEL / PINCH</div>
+                  <div class="scope-hud-badge" id="scope-hud-mag" aria-live="off">1.0×</div>
+                  <div class="scope-hud-crosshair-center" id="scope-hud-hint">Drag or arrow keys to pan · scroll or pinch to zoom</div>
                 </div>
               </div>
             </div>
@@ -239,7 +244,7 @@
             <!-- ZOOM PRESETS -->
             <div class="scope-controls-bar">
               <div class="d-flex align-items-center gap-2 w-100">
-                <span class="tactical-font text-muted small" id="zoom-label">ZOOM:</span>
+                <span class="tactical-font text-muted small" id="zoom-label">Zoom</span>
                 <div class="zoom-buttons-group zoom-presets" id="zoom-presets" role="group" aria-labelledby="zoom-label">
                   <button type="button" class="btn-zoom-step active" data-zoom="1">1x</button>
                   <button type="button" class="btn-zoom-step" data-zoom="2">2x</button>
@@ -266,7 +271,7 @@
           <!-- STATION PANEL (FEAT-004), shown in station mode -->
           <div class="card-tactical mb-3" id="station-panel" hidden>
             <div class="card-header-tactical">
-              <h2 class="card-title-tactical mb-0 h5"><i class="bi bi-signpost-split" aria-hidden="true"></i> Field-Shooting Station</h2>
+              <h2 class="card-title-tactical mb-0 h5">Field-shooting station</h2>
               <span class="badge badge-orange mono-font" id="station-clock" aria-live="off">--:--</span>
             </div>
             <div class="card-body" id="station-body">
@@ -277,7 +282,7 @@
           <!-- SCENARIO INFO CARD -->
           <div class="card-tactical mb-3" id="sim-scenario-card">
             <div class="card-header-tactical">
-              <h2 class="card-title-tactical mb-0 h5"><i class="bi bi-flag-fill" aria-hidden="true"></i> <span id="sim-card-title">Current Target Scenario</span></h2>
+              <h2 class="card-title-tactical mb-0 h5"><span id="sim-card-title">Target</span></h2>
               <span class="badge badge-orange mono-font" id="sim-shot-timer" aria-label="Elapsed time">00:00</span>
             </div>
             <div class="card-body">
@@ -294,48 +299,48 @@
                 <div class="row g-2 mb-2 sim-known-sizes">
                   <div class="col-6">
                     <div class="known-size-box">
-                      <div class="text-muted small">KNOWN HEIGHT</div>
+                      <div class="text-muted small">Height</div>
                       <div class="mono-font fw-bold text-orange-highlight" id="sim-target-height">–</div>
                     </div>
                   </div>
                   <div class="col-6">
                     <div class="known-size-box">
-                      <div class="text-muted small">KNOWN WIDTH</div>
+                      <div class="text-muted small">Width</div>
                       <div class="mono-font fw-bold text-orange-highlight" id="sim-target-width">–</div>
                     </div>
                   </div>
                 </div>
 
                 <div class="mb-2" id="sim-mil-reading-row" hidden>
-                  <label for="sim-mil-reading" class="form-label tactical-font text-muted mb-1">YOUR MIL READING (OPTIONAL):</label>
+                  <label for="sim-mil-reading" class="form-label tactical-font text-muted mb-1">Your MIL reading (optional)</label>
                   <input type="text" inputmode="decimal" autocomplete="off" id="sim-mil-reading" class="form-control-tactical w-100" placeholder="e.g. 1.6">
                 </div>
 
-                <label for="sim-estimated-distance" class="form-label tactical-font text-muted mb-1">YOUR ESTIMATED DISTANCE (<span id="sim-unit-label">METERS</span>):</label>
+                <label for="sim-estimated-distance" class="form-label tactical-font text-muted mb-1">Your distance estimate (<span id="sim-unit-label">meters</span>)</label>
                 <div class="input-group">
                   <input type="text" inputmode="decimal" autocomplete="off" enterkeyhint="done" id="sim-estimated-distance" class="form-control-tactical form-control-lg flex-grow-1" placeholder="Distance in meters">
                   <button class="btn btn-tactical btn-tactical-primary px-4" type="submit" id="btn-submit-estimate">
-                    SUBMIT
+                    Check
                   </button>
                 </div>
               </form>
 
               <div class="alert alert-dark border-secondary p-2 mt-3 mb-0 small sim-instructions">
                 <i class="bi bi-info-circle text-tan-accent me-1" aria-hidden="true"></i>
-                <strong>Instructions:</strong> Use the reticle subtensions to measure the target's height or width in MILs, calculate the distance, and enter it above.
+                Measure the target's height or width against the reticle in MILs, then: distance (m) = size (mm) ÷ MIL reading.
               </div>
 
               <div class="form-check form-switch mt-3">
                 <input class="form-check-input" type="checkbox" role="switch" id="sim-coach-toggle">
-                <label class="form-check-label small" for="sim-coach-toggle">Coach mode: also enter my MIL reading and show whether errors come from reading or arithmetic</label>
+                <label class="form-check-label small" for="sim-coach-toggle">Coach mode: also enter my MIL reading, to see whether a miss came from the reading or the arithmetic</label>
               </div>
 
               <div class="d-flex gap-2 mt-3">
                 <button type="button" class="btn btn-tactical btn-tactical-outline flex-shrink-0" id="btn-show-solution" title="Reveal the distance and the calculation. The round is not scored.">
-                  <i class="bi bi-lightbulb" aria-hidden="true"></i> Show solution
+                  Show solution
                 </button>
                 <button type="button" class="btn btn-tactical btn-tactical-secondary flex-grow-1" id="btn-next-scenario">
-                  <i class="bi bi-arrow-right-circle" aria-hidden="true"></i> Next Scenario
+                  Next target
                 </button>
               </div>
             </div>
@@ -344,27 +349,27 @@
           <!-- RESULT & MATHEMATICAL BREAKDOWN CARD -->
           <div class="card-tactical" id="sim-result-card" style="display:none;" aria-live="polite">
             <div class="card-header-tactical">
-              <h2 class="card-title-tactical mb-0 h5"><i class="bi bi-calculator" aria-hidden="true"></i> <span id="res-title">Calculation Breakdown</span></h2>
+              <h2 class="card-title-tactical mb-0 h5"><span id="res-title">Result</span></h2>
               <span id="res-score-badge" class="badge bg-success">–</span>
             </div>
             <div class="card-body">
               <div class="row g-2 mb-3">
                 <div class="col-4 text-center">
-                  <div class="text-muted small">ACTUAL RANGE</div>
+                  <div class="text-muted small">Actual range</div>
                   <div class="mono-font fw-bold text-success fs-5" id="res-actual-dist">–</div>
                 </div>
                 <div class="col-4 text-center">
-                  <div class="text-muted small">YOUR ESTIMATE</div>
+                  <div class="text-muted small">Your estimate</div>
                   <div class="mono-font fw-bold text-tan-light fs-5" id="res-estimated-dist">–</div>
                 </div>
                 <div class="col-4 text-center">
-                  <div class="text-muted small">ERROR</div>
+                  <div class="text-muted small">Error</div>
                   <div class="mono-font fw-bold text-orange-highlight fs-5" id="res-error-m">–</div>
                 </div>
               </div>
 
               <div class="calculation-box">
-                <div class="tactical-font text-tan-accent mb-1" style="font-size:0.85rem;">APPLIED MIL FORMULA:</div>
+                <div class="small text-muted mb-1">Working</div>
                 <div class="math-formula" id="res-math-breakdown"></div>
               </div>
               <div class="calculation-box mt-2" id="res-coach" hidden></div>
@@ -376,14 +381,14 @@
         <!-- SCENARIO OPTIONS: reticle, environment, filters, fine pan -->
         <div class="col-lg-7 col-xl-7 order-3">
           <div class="card-tactical p-3">
-            <h2 class="tactical-font text-tan-light h6 mb-2">Scenario options</h2>
+            <h2 class="h6 mb-2">Scenario options</h2>
             <div class="scope-controls-bar sim-options-grid">
               <div>
-                <label for="sim-reticle-select" class="tactical-font text-muted small d-block">RETICLE</label>
+                <label for="sim-reticle-select" class="tactical-font text-muted small d-block">Reticle</label>
                 <select id="sim-reticle-select" class="form-select-tactical form-select-sm w-100"></select>
               </div>
               <div>
-                <label for="sim-environment-select" class="tactical-font text-muted small d-block">ENVIRONMENT</label>
+                <label for="sim-environment-select" class="tactical-font text-muted small d-block">Environment</label>
                 <select id="sim-environment-select" class="form-select-tactical form-select-sm w-100" title="Hunting-category targets always use Forest or Mountain">
                   <option value="random" selected>Random</option>
                   <option value="forest">Forest</option>
@@ -399,7 +404,7 @@
                 </select>
               </div>
               <div>
-                <label for="sim-distance-filter" class="tactical-font text-muted small d-block">RANGE</label>
+                <label for="sim-distance-filter" class="tactical-font text-muted small d-block">Distance band</label>
                 <select id="sim-distance-filter" class="form-select-tactical form-select-sm w-100">
                   <option value="any" selected>Any distance</option>
                   <option value="close">Close (&lt; 200 m)</option>
@@ -418,7 +423,7 @@
             </div>
 
             <div class="mt-3">
-              <span class="tactical-font text-muted small" id="sim-categories-label">TARGET CATEGORIES:</span>
+              <span class="tactical-font text-muted small" id="sim-categories-label">Target categories</span>
               <div class="zoom-buttons-group flex-wrap mt-1" id="sim-category-filter-buttons" role="group" aria-labelledby="sim-categories-label">
                 <!-- Populated by TrainingManager.renderCategoryFilterUI() -->
               </div>
@@ -434,12 +439,11 @@
       <div class="learn-hero mb-4">
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
           <div>
-            <span class="badge badge-olive mb-2"><i class="bi bi-journal-bookmark-fill"></i> VECTOR OPTICS ACADEMY SPECIFICATION</span>
-            <h1 class="display-5 text-tan-light mb-1">MRAD & MIL Range Estimation Masterclass</h1>
+                        <h1 class="display-5 mb-1">Range estimation with a MIL reticle</h1>
             <p class="lead text-muted mb-0">Learn stadiametric rangefinding, FFP optics geometry, metric & imperial formulas, and angle compensation.</p>
           </div>
           <a href="https://www.vectoroptics.com/Academy/Estimate-Hunting-Distance-with-Reticle.html" target="_blank" rel="noopener" class="btn btn-sm btn-tactical-outline">
-            <i class="bi bi-box-arrow-up-right"></i> Vector Optics Reference
+            Further reading at Vector Optics <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
           </a>
         </div>
       </div>
@@ -475,7 +479,7 @@
               In a <strong>First Focal Plane (FFP)</strong> scope, the reticle is positioned in front of the optical zoom assembly. As magnification changes, the reticle scales up or down in exact sync with the target image.
             </p>
             <p class="text-muted">
-              <strong>Why FFP is Superior for Range Estimation:</strong> MIL subtensions remain 100% accurate at <em>ALL magnification levels</em> (e.g. 3x to 25x). In Second Focal Plane (SFP) scopes, reticle subtensions are only accurate at one specific calibration zoom (usually max zoom).
+              <strong>Why FFP suits range estimation:</strong> MIL subtensions stay correct at every magnification (e.g. 3x to 25x). In Second Focal Plane (SFP) scopes, reticle subtensions are only accurate at one specific calibration zoom (usually max zoom).
             </p>
 
             <div class="diagram-box mt-3" id="diagram-ffp-vs-sfp">
@@ -487,7 +491,7 @@
         <!-- SECTION 3: VECTOR OPTICS STADIAMETRIC MEASUREMENT PROTOCOL -->
         <div class="col-lg-12">
           <div class="diagram-card">
-            <h3 class="tactical-font text-tan-light mb-3"><i class="bi bi-crosshair2"></i> 3. Vector Optics 4-Step Measuring Protocol</h3>
+            <h3 class="tactical-font text-tan-light mb-3">3. Measuring a target in four steps</h3>
             
             <div class="row g-3">
               <div class="col-md-3">
@@ -593,14 +597,14 @@
             <form id="learn-calculator-form">
               <div class="row g-2 mb-3">
                 <div class="col-6">
-                  <label class="form-label small text-muted">UNIT SYSTEM</label>
+                  <label class="form-label small text-muted">Units</label>
                   <select id="calc-unit" class="form-select-tactical form-select-sm w-100">
                     <option value="metric">Metric (Meters / CM)</option>
                     <option value="imperial">Imperial (Yards / Inches)</option>
                   </select>
                 </div>
                 <div class="col-6">
-                  <label class="form-label small text-muted">KNOWN TARGET PRESET</label>
+                  <label class="form-label small text-muted">Target preset</label>
                   <select id="calc-preset" class="form-select-tactical form-select-sm w-100">
                     <option value="custom">Custom Size</option>
                     <option value="0.65" selected>Swedish B65 (0.65m / 65cm)</option>
@@ -624,7 +628,7 @@
               </div>
 
               <div class="calc-result-box p-3 rounded border border-warning text-center">
-                <div class="small text-muted mb-1">CALCULATED DISTANCE</div>
+                <div class="small text-muted mb-1">Calculated distance</div>
                 <div id="calc-result-distance" class="display-6 text-orange-highlight fw-bold">250 m</div>
                 <div id="calc-result-formula" class="small text-tan-accent mt-1">Formula: (0.65m &times; 1000) / 2.6 MIL = 250m</div>
               </div>
@@ -747,7 +751,7 @@
         </div>
         <div class="d-flex gap-2 mt-3 mt-md-0">
           <button class="btn btn-tactical btn-tactical-primary" id="btn-new-target">
-            <i class="bi bi-plus-circle"></i> Create Custom Target
+            New custom target
           </button>
           <button type="button" class="btn btn-tactical btn-tactical-outline" id="btn-export-targets" title="Download your custom targets as a JSON file">
             <i class="bi bi-download" aria-hidden="true"></i> Export Custom Targets
@@ -783,7 +787,7 @@
 
                 <!-- RETICLE PREFERENCE -->
                 <div class="mb-4">
-                  <label for="settings-reticle" class="form-label tactical-font text-tan-light">DEFAULT RETICLE</label>
+                  <label for="settings-reticle" class="form-label tactical-font text-tan-light">Default reticle</label>
                   <select id="settings-reticle" name="reticle-select" class="form-select-tactical w-100">
                     <option value="mil_dot">MIL Dot Reticle</option>
                     <option value="christmas_tree">Christmas Tree Grid (Horner / PRS)</option>
@@ -798,7 +802,7 @@
 
                 <!-- UNITS PREFERENCE -->
                 <div class="mb-4">
-                  <label for="settings-unit" class="form-label tactical-font text-tan-light">MEASUREMENT UNITS</label>
+                  <label for="settings-unit" class="form-label tactical-font text-tan-light">Units</label>
                   <select id="settings-unit" name="unit-select" class="form-select-tactical w-100">
                     <option value="metric">Metric System (Meters, Centimeters, Millimeters)</option>
                     <option value="imperial">Imperial System (Yards, Inches)</option>
@@ -807,19 +811,19 @@
 
                 <!-- THEME SELECTOR -->
                 <div class="mb-4">
-                  <label for="settings-theme" class="form-label tactical-font text-tan-light">VISUAL THEME</label>
+                  <label for="settings-theme" class="form-label tactical-font text-tan-light">Colour theme</label>
                   <select id="settings-theme" name="theme-select" class="form-select-tactical w-100">
-                    <option value="dark-tactical">Dark Tactical (Default)</option>
-                    <option value="military-olive">Military Olive Green</option>
-                    <option value="desert-tan">Desert Tan</option>
-                    <option value="high-contrast">High Contrast Tactical</option>
+                    <option value="dark-tactical">Spruce (default)</option>
+                    <option value="military-olive">Olive</option>
+                    <option value="desert-tan">Sand</option>
+                    <option value="high-contrast">High contrast</option>
                   </select>
                 </div>
 
                 <!-- RETICLE ILLUMINATION COLOR & BRIGHTNESS -->
                 <div class="row g-3 mb-4">
                   <div class="col-md-6">
-                    <label for="settings-reticle-color" class="form-label tactical-font text-tan-light">RETICLE ILLUMINATION COLOR</label>
+                    <label for="settings-reticle-color" class="form-label tactical-font text-tan-light">Reticle illumination</label>
                     <select id="settings-reticle-color" name="reticle-color" class="form-select-tactical w-100">
                       <option value="#ff2a2a">Tactical Red</option>
                       <option value="#00ff66">Night Vision Green</option>
@@ -829,7 +833,7 @@
                   </div>
                   <div class="col-md-6">
                     <label for="settings-brightness" class="form-label tactical-font text-tan-light d-flex justify-content-between">
-                      RETICLE BRIGHTNESS <span id="brightness-val" class="mono-font text-orange-highlight">100%</span>
+                      Reticle brightness <span id="brightness-val" class="mono-font text-orange-highlight">100%</span>
                     </label>
                     <input type="range" id="settings-brightness" name="reticle-brightness" class="form-range" min="0.2" max="1.0" step="0.05" value="1.0">
                   </div>
@@ -838,11 +842,11 @@
                 <!-- SENSITIVITY SLIDERS -->
                 <div class="row g-3 mb-4">
                   <div class="col-md-6">
-                    <label for="settings-zoom-sens" class="form-label tactical-font text-tan-light">ZOOM SENSITIVITY</label>
+                    <label for="settings-zoom-sens" class="form-label tactical-font text-tan-light">Zoom sensitivity</label>
                     <input type="range" id="settings-zoom-sens" name="zoom-sensitivity" class="form-range" min="0.5" max="2.0" step="0.1" value="1.0">
                   </div>
                   <div class="col-md-6">
-                    <label for="settings-pan-sens" class="form-label tactical-font text-tan-light">PAN / DRAG SENSITIVITY</label>
+                    <label for="settings-pan-sens" class="form-label tactical-font text-tan-light">Pan sensitivity</label>
                     <input type="range" id="settings-pan-sens" name="pan-sensitivity" class="form-range" min="0.5" max="2.0" step="0.1" value="1.0">
                   </div>
                 </div>
@@ -850,7 +854,7 @@
 
                 <!-- OPTICS REALISM (FEAT-001) -->
                 <fieldset class="mb-4 optics-fieldset">
-                  <legend class="form-label tactical-font text-tan-light fs-6">SCOPE OPTICS</legend>
+                  <legend class="form-label tactical-font text-tan-light fs-6">Scope optics</legend>
                   <div class="row g-3">
                     <div class="col-md-6">
                       <label for="settings-optics-mode" class="form-label small text-muted mb-1">Magnification scale</label>
@@ -887,7 +891,7 @@
                 <div class="form-check form-switch mb-4">
                   <input class="form-check-input" type="checkbox" name="sound-toggle" id="sound-toggle" checked>
                   <label class="form-check-label tactical-font text-tan-light" for="sound-toggle">
-                    ENABLE AUDIO FEEDBACK & OPTICS CLICK SOUNDS
+                    Sound effects
                   </label>
                 </div>
 
@@ -896,7 +900,7 @@
                 <!-- DANGER ZONE -->
                 <div class="d-flex justify-content-between align-items-center">
                   <div>
-                    <h6 class="tactical-font text-danger mb-0">CLEAR STATISTICS</h6>
+                    <h6 class="tactical-font text-danger mb-0">Clear statistics</h6>
                     <p class="small text-muted mb-0">Reset round history, scores, and personal records.</p>
                   </div>
                   <button type="button" class="btn btn-outline-danger btn-sm" id="btn-reset-stats">Reset All Stats</button>
@@ -987,33 +991,33 @@
             <input type="hidden" id="target-image-data">
 
             <div class="mb-3">
-              <label class="form-label tactical-font text-muted">TARGET NAME *</label>
+              <label class="form-label tactical-font text-muted">Name</label>
               <input type="text" id="target-name" class="form-control-tactical w-100" placeholder="e.g. Steel Gong 25cm" required>
             </div>
 
             <div class="mb-3">
-              <label class="form-label tactical-font text-muted">CATEGORY</label>
+              <label class="form-label tactical-font text-muted">Category</label>
               <input type="text" id="target-category" class="form-control-tactical w-100" placeholder="Custom, Steel, PRS, etc.">
             </div>
 
             <div class="row g-3 mb-3">
               <div class="col-6">
-                <label class="form-label tactical-font text-muted">HEIGHT (METERS) *</label>
+                <label class="form-label tactical-font text-muted">Height (m)</label>
                 <input type="number" step="0.01" id="target-height" class="form-control-tactical w-100" placeholder="e.g. 0.45" required>
               </div>
               <div class="col-6">
-                <label class="form-label tactical-font text-muted">WIDTH (METERS) *</label>
+                <label class="form-label tactical-font text-muted">Width (m)</label>
                 <input type="number" step="0.01" id="target-width" class="form-control-tactical w-100" placeholder="e.g. 0.40" required>
               </div>
             </div>
 
             <div class="row g-3 mb-3">
               <div class="col-6">
-                <label class="form-label tactical-font text-muted">MIN DISTANCE (METERS)</label>
+                <label class="form-label tactical-font text-muted">Closest distance (m)</label>
                 <input type="number" step="1" min="1" id="target-min-distance" class="form-control-tactical w-100" placeholder="e.g. 100">
               </div>
               <div class="col-6">
-                <label class="form-label tactical-font text-muted">MAX DISTANCE (METERS)</label>
+                <label class="form-label tactical-font text-muted">Farthest distance (m)</label>
                 <input type="number" step="1" min="1" id="target-max-distance" class="form-control-tactical w-100" placeholder="e.g. 400">
               </div>
               <div class="col-12">
@@ -1022,12 +1026,12 @@
             </div>
 
             <div class="mb-3">
-              <label class="form-label tactical-font text-muted">DESCRIPTION</label>
+              <label class="form-label tactical-font text-muted">Notes</label>
               <textarea id="target-description" class="form-control-tactical w-100" rows="2" placeholder="Brief target notes or reference specs"></textarea>
             </div>
 
             <div class="mb-3">
-              <label class="form-label tactical-font text-muted">TARGET SHAPE</label>
+              <label class="form-label tactical-font text-muted">Preset shape</label>
               <select id="target-shape" class="form-select-tactical w-100">
                 <!-- Populated from CUSTOM_TARGET_SHAPES in targets.js -->
               </select>
@@ -1036,7 +1040,7 @@
 
             <div class="mb-3">
               <label class="form-label tactical-font text-muted d-flex justify-content-between align-items-center">
-                <span>DRAW CUSTOM TARGET (OPTIONAL)</span>
+                <span>Draw the target (optional)</span>
                 <span class="d-flex gap-2">
                   <button type="button" class="btn btn-sm btn-tactical-secondary" id="btn-undo-drawing" title="Undo last stroke"><i class="bi bi-arrow-counterclockwise"></i></button>
                   <button type="button" class="btn btn-sm btn-tactical-secondary" id="btn-clear-drawing" title="Clear drawing">Clear</button>
@@ -1063,7 +1067,7 @@
             </div>
 
             <div class="mb-3">
-              <label class="form-label tactical-font text-muted">CUSTOM IMAGE UPLOAD (OPTIONAL)</label>
+              <label class="form-label tactical-font text-muted">Upload an image (optional)</label>
               <input type="file" id="target-image-file" class="form-control-tactical w-100" accept="image/*">
               <div id="target-modal-preview" class="mt-2 text-center"></div>
             </div>

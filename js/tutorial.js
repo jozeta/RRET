@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Learn Page & Interactive Tutorial Engine (Vector Optics Academy Edition)
+   Learn page: diagrams, calculator, quiz and reticle previews
    ========================================================================== */
 
 export class TutorialController {
@@ -28,7 +28,7 @@ export class TutorialController {
           
           <!-- Shooter Eye -->
           <circle cx="40" cy="120" r="14" fill="#526348" stroke="#708563" stroke-width="2"/>
-          <text x="40" y="155" fill="#9ba7b4" font-family="'Rajdhani', sans-serif" font-size="12" text-anchor="middle">SHOOTER (EYE)</text>
+          <text x="40" y="155" fill="#9ba7b4" font-family="'Archivo', sans-serif" font-size="12" text-anchor="middle">Shooter (eye)</text>
 
           <!-- Angular Rays -->
           <line x1="40" y1="120" x2="620" y2="40" stroke="#ff8c00" stroke-width="1.8" stroke-dasharray="4 4"/>
@@ -38,17 +38,17 @@ export class TutorialController {
           <line x1="280" y1="88" x2="280" y2="152" stroke="#c9a572" stroke-width="3"/>
           <line x1="40" y1="175" x2="280" y2="175" stroke="#c9a572" stroke-width="1" marker-end="url(#arrow)"/>
           <text x="160" y="195" fill="#c9a572" font-family="'Roboto Mono', monospace" font-size="13" text-anchor="middle">100 METERS</text>
-          <text x="295" y="125" fill="#ff8c00" font-family="'Roboto Mono', monospace" font-size="13">10 cm (0.1m)</text>
+          <text x="295" y="125" fill="#c9a55a" font-family="'Roboto Mono', monospace" font-size="13">10 cm (0.1m)</text>
 
           <!-- 1000m Marker -->
           <line x1="620" y1="40" x2="620" y2="200" stroke="#ff8c00" stroke-width="3"/>
           <line x1="40" y1="215" x2="620" y2="215" stroke="#ff8c00" stroke-width="1" marker-end="url(#arrow)"/>
-          <text x="330" y="232" fill="#ff8c00" font-family="'Roboto Mono', monospace" font-size="13" text-anchor="middle">1000 METERS</text>
-          <text x="630" y="125" fill="#ff8c00" font-family="'Roboto Mono', monospace" font-size="14" font-weight="bold">1 METER (100cm)</text>
+          <text x="330" y="232" fill="#c9a55a" font-family="'Roboto Mono', monospace" font-size="13" text-anchor="middle">1000 METERS</text>
+          <text x="630" y="125" fill="#c9a55a" font-family="'Roboto Mono', monospace" font-size="14" font-weight="bold">1 METER (100cm)</text>
 
           <!-- MIL Arc Angle -->
           <path d="M 120 109 A 80 80 0 0 1 120 131" fill="none" stroke="#ff8c00" stroke-width="2"/>
-          <text x="135" y="124" fill="#ff8c00" font-family="'Rajdhani', sans-serif" font-size="14" font-weight="bold">1 MIL (1 mrad)</text>
+          <text x="135" y="124" fill="#c9a55a" font-family="'Archivo', sans-serif" font-size="14" font-weight="bold">1 MIL (1 mrad)</text>
         </svg>
       `;
     }
@@ -61,15 +61,15 @@ export class TutorialController {
           <!-- FFP Box -->
           <g transform="translate(20, 10)">
             <rect x="0" y="0" width="310" height="210" rx="10" fill="#14181c" stroke="#526348" stroke-width="2"/>
-            <text x="155" y="28" fill="#708563" font-family="'Rajdhani', sans-serif" font-size="15" font-weight="bold" text-anchor="middle">FIRST FOCAL PLANE (FFP)</text>
+            <text x="155" y="28" fill="#708563" font-family="'Archivo', sans-serif" font-size="15" font-weight="bold" text-anchor="middle">First focal plane (FFP)</text>
             
             <circle cx="155" cy="110" r="60" fill="#0b0d0f" stroke="#c9a572" stroke-width="2"/>
             <!-- Target & Reticle grow together -->
             <polygon points="145,90 165,90 170,100 170,130 140,130 140,100" fill="#1e242b" stroke="#ffffff"/>
             <line x1="95" y1="110" x2="215" y2="110" stroke="#ff8c00" stroke-width="2"/>
             <line x1="155" y1="50" x2="155" y2="170" stroke="#ff8c00" stroke-width="2"/>
-            <circle cx="125" cy="110" r="3" fill="#ff8c00"/>
-            <circle cx="185" cy="110" r="3" fill="#ff8c00"/>
+            <circle cx="125" cy="110" r="3" fill="#c9a55a"/>
+            <circle cx="185" cy="110" r="3" fill="#c9a55a"/>
             
             <text x="155" y="190" fill="#9ba7b4" font-family="Inter, sans-serif" font-size="11" text-anchor="middle">Reticle & Target scale ALWAYS at 1:1 ratio</text>
           </g>
@@ -77,7 +77,7 @@ export class TutorialController {
           <!-- SFP Box -->
           <g transform="translate(370, 10)">
             <rect x="0" y="0" width="310" height="210" rx="10" fill="#14181c" stroke="#2a343d" stroke-width="2"/>
-            <text x="155" y="28" fill="#9ba7b4" font-family="'Rajdhani', sans-serif" font-size="15" font-weight="bold" text-anchor="middle">SECOND FOCAL PLANE (SFP)</text>
+            <text x="155" y="28" fill="#9ba7b4" font-family="'Archivo', sans-serif" font-size="15" font-weight="bold" text-anchor="middle">Second focal plane (SFP)</text>
             
             <circle cx="155" cy="110" r="60" fill="#0b0d0f" stroke="#2a343d" stroke-width="2"/>
             <!-- Target grows on zoom, reticle stays FIXED size -->
@@ -99,16 +99,16 @@ export class TutorialController {
           <path d="M 40 180 L 440 180 L 440 60 Z" fill="rgba(82, 99, 72, 0.15)" stroke="#526348" stroke-width="2"/>
           
           <!-- Shooter on hill base -->
-          <circle cx="40" cy="180" r="10" fill="#ff8c00"/>
-          <text x="40" y="205" fill="#9ba7b4" font-family="'Rajdhani', sans-serif" font-size="12" text-anchor="middle">SHOOTER</text>
+          <circle cx="40" cy="180" r="10" fill="#c9a55a"/>
+          <text x="40" y="205" fill="#9ba7b4" font-family="'Archivo', sans-serif" font-size="12" text-anchor="middle">Shooter</text>
 
           <!-- Target at top of slope -->
           <polygon points="430,45 450,45 450,60 430,60" fill="#ef4444"/>
-          <text x="440" y="35" fill="#ef4444" font-family="'Rajdhani', sans-serif" font-size="12" text-anchor="middle">TARGET</text>
+          <text x="440" y="35" fill="#ef4444" font-family="'Archivo', sans-serif" font-size="12" text-anchor="middle">Target</text>
 
           <!-- Slanted Line of Sight -->
           <line x1="40" y1="180" x2="440" y2="60" stroke="#ff8c00" stroke-width="2" stroke-dasharray="4 4"/>
-          <text x="210" y="110" fill="#ff8c00" font-family="'Roboto Mono', monospace" font-size="12" transform="rotate(-16, 210, 110)">Line-of-Sight Range (300m)</text>
+          <text x="210" y="110" fill="#c9a55a" font-family="'Roboto Mono', monospace" font-size="12" transform="rotate(-16, 210, 110)">Line-of-Sight Range (300m)</text>
 
           <!-- Horizontal Distance -->
           <line x1="40" y1="180" x2="440" y2="180" stroke="#c9a572" stroke-width="2.5"/>

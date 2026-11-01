@@ -14,7 +14,8 @@
 ## 🎯 Key Features
 
 ### 1. First Focal Plane (FFP) Optics Engine
-- **True FFP Parity**: Reticle subtensions, targets and the whole landscape scale together across **1x to 25x magnification**. Every target is drawn to exactly its stated height and width, so a perfect MIL reading gives a perfect answer.
+- **True FFP Parity**: Reticle subtensions, targets and the whole landscape scale together across **1x to 25x magnification**. Every target is drawn to exactly its stated height and width, verified by an automated test that measures all 86 targets on screen, so a perfect MIL reading gives a perfect answer.
+- **A landscape to real scale**: Trees, buildings, berms and mountains have real sizes and stand at real distances behind the target, with the horizon at eye level, so an animal never looks bigger than the forest behind it.
 - **Realistic Optics Mode**: Calibrate your screen with a bank card and set your viewing distance, and the target appears as large as it would through a real scope. Pick a scope profile: LPVO 1–10x, Hunting 3–18x or Precision 5–25x. The original enlarged "Arcade" scale stays the default.
 - **Vector Reticle Rendering**: Crisp SVG reticles with customizable illumination color (Red, Green, Amber, White) and brightness level.
 - **Realistic Pan & Zoom**: Panning turns the scope across a fixed landscape, and the target stays planted on its ground. Controls: mouse drag, proportional trackpad/wheel and pinch zoom, D-pad buttons, and keyboard (arrow keys pan, `+`/`-` zoom, `C` re-centres).
@@ -35,7 +36,7 @@
 - **IPSC Metric Silhouettes**: 3 practical shooting metric/mini cardboard targets.
 - **PRS Steel Poppers**: 4 precision rifle series poppers (4in–10in) for long-range engagement.
 - **Military Silhouettes**: 3 E-type and full/half-body qualification silhouettes.
-- **Hunting**: 12 broadside low-poly game silhouettes for hunting-style range estimation — deer, elk, moose, reindeer, black bear, wild boar, grey wolf, coyote, red fox, mountain hare, pheasant, and wild turkey.
+- **Hunting**: 12 broadside game animals drawn to real proportions and sizes (height to the top of antlers/ears): white-tailed deer, elk, moose, reindeer, black bear, wild boar, grey wolf, coyote, red fox, mountain hare, pheasant and wild turkey.
 - **Custom Target Builder**: Create custom targets by specifying height, width, an optional preferred distance range, and a description, then define their appearance from a preset shape, a freehand drawing (pen, line, rectangle, ellipse, eraser tools), or an uploaded image. Existing custom targets can be edited or duplicated.
 - **JSON Import / Export**: Export your custom targets and import them on another device. Imports are validated, size-limited and idempotent: re-importing the same file updates targets instead of duplicating them, and built-in targets are never duplicated.
 
@@ -132,7 +133,7 @@ No dependencies to install. Requires Node 22+; the browser tests also need Chrom
 ```bash
 npm run check          # syntax-check every module
 npm test               # unit tests: MIL maths, scoring, scenario rules, storage/migration, import validation, reticle geometry, data integrity, PWA precache list
-npm run test:browser   # 22 end-to-end checks in headless Chrome (set CHROME_PATH if it isn't found)
+npm run test:browser   # 24 end-to-end checks, including an on-screen size measurement of all 86 targets in headless Chrome (set CHROME_PATH if it isn't found)
 ```
 
 GitHub Actions runs all three on every push and pull request (`.github/workflows/ci.yml`).

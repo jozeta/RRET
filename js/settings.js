@@ -14,10 +14,10 @@ const DEFAULT_CALIB_PX = Math.round((96 / 25.4) * CARD_WIDTH_MM);
  * the previous one behind (audit BUG-019).
  */
 const THEMES = {
-  'dark-tactical': { '--bg-dark-base': '#0b0d0f', '--bg-dark-surface': '#14181c', '--bg-dark-card': '#1b2126', '--olive-primary': '#526348', '--tan-accent': '#c9a572', '--orange-highlight': '#ff8c00' },
-  'military-olive': { '--bg-dark-base': '#0d120e', '--bg-dark-surface': '#17211a', '--bg-dark-card': '#1f2d23', '--olive-primary': '#5e7b51', '--tan-accent': '#d4b277', '--orange-highlight': '#ff8c00' },
-  'desert-tan': { '--bg-dark-base': '#14110e', '--bg-dark-surface': '#211b16', '--bg-dark-card': '#2e261f', '--olive-primary': '#7a674d', '--tan-accent': '#e3ba83', '--orange-highlight': '#ff8c00' },
-  'high-contrast': { '--bg-dark-base': '#000000', '--bg-dark-surface': '#111111', '--bg-dark-card': '#1a1a1a', '--olive-primary': '#00ff66', '--tan-accent': '#ffff00', '--orange-highlight': '#ff6600' }
+  'dark-tactical': { '--bg': '#18201d', '--panel': '#202a26', '--raised': '#28332e', '--sunken': '#141a18', '--brass': '#c9a55a', '--brass-hover': '#d8b670' },
+  'military-olive': { '--bg': '#1b1f17', '--panel': '#23291e', '--raised': '#2c3326', '--sunken': '#161a13', '--brass': '#c2b06a', '--brass-hover': '#d2c07c' },
+  'desert-tan': { '--bg': '#1f1b17', '--panel': '#28231e', '--raised': '#322b25', '--sunken': '#191612', '--brass': '#d6a86a', '--brass-hover': '#e2b87e' },
+  'high-contrast': { '--bg': '#000000', '--panel': '#0d0d0d', '--raised': '#1a1a1a', '--sunken': '#000000', '--brass': '#ffd34d', '--brass-hover': '#ffe080' }
 };
 
 export class SettingsController {

@@ -18,6 +18,16 @@ Audit fixes and new training features (pull request #1).
 - Sharp rendering on high-resolution screens; proportional trackpad zoom; arrow keys pan; Back button works; mobile menu closes.
 - Result card in the selected units; whole-yard imperial distances; Tremor reticle 3 MIL tick; timer pauses off-page.
 
+### Targets, scenery and size accuracy
+- Every target is verified end to end: an automated browser test renders all 86 targets at three distances each and measures them in pixels against size × 1000 / distance.
+- Animals redrawn as true-to-proportion silhouettes in natural colours, with realistic sizes (height measured to the top of the antlers/ears). Previous sizes were far too small, e.g. a 0.9 m deer and a 2.0 m moose including antlers.
+- People, IPSC (metric, mini and an octagonal classic at 46 × 58 cm), PRS poppers and steel gongs redrawn; field figures get a matte painted finish.
+- Known sizes on the scenario card no longer round misleadingly (a 36 mm figure showed as "4 cm").
+- The landscape is built to real-world scale behind the target: trees, buildings, berms and mountains have real sizes and distances, the horizon is at eye level and the target stands on the ground in front of them.
+
+### Design
+- New visual identity: spruce and cartridge-brass palette, Archivo variable type, sentence case throughout, calmer panels and segmented controls; a redrawn scope-view hero on Home.
+
 ### Added
 - Coach mode (reading error vs maths error), station mode (fältskytte) with printable range cards, progress analytics with CSV export, realistic optics calibration.
 - Works offline and can be installed as an app; all assets self-hosted with a Content-Security-Policy.

@@ -6,6 +6,8 @@ import { ScopeEngine } from '../js/scope.js';
 import { TARGET_CATEGORIES, CUSTOM_TARGET_SHAPES } from '../js/targets.js';
 import { diagnoseEstimate } from '../js/coach.js';
 import { computeAnalytics, bandOf } from '../js/analytics.js';
+import { ART_TYPES } from '../js/target-art.js';
+const hasRenderer = (t) => ART_TYPES.has(t) || utilsSrc.includes(`case '${t}'`);
 
 const targets = JSON.parse(readFileSync(new URL('../data/targets.json', import.meta.url)));
 const reticles = JSON.parse(readFileSync(new URL('../data/reticles.json', import.meta.url)));
@@ -51,7 +53,7 @@ test('targets.json integrity (TEST-007)', () => {
     assert.ok(TARGET_CATEGORIES.includes(t.category), `${t.id} category ${t.category}`);
     assert.ok(t.width > 0 && t.height > 0, `${t.id} size`);
     assert.ok(t.minDistance > 0 && t.minDistance <= t.maxDistance, `${t.id} window`);
-    assert.ok(utilsSrc.includes(`case '${t.svgType}'`), `${t.id} svgType ${t.svgType} has no renderer`);
+    assert.ok(hasRenderer(t.svgType), `${t.id} svgType ${t.svgType} has no renderer`);
     const m = t.description.match(/Width ([\d.,]+) ?(mm|cm), Height ([\d.,]+) ?(mm|cm)/);
     if (m) {
       const f = (v, u) => parseFloat(v.replace(',', '.')) / (u === 'mm' ? 1000 : 100);
@@ -63,7 +65,7 @@ test('targets.json integrity (TEST-007)', () => {
 test('custom shape list only offers rendered shapes', () => {
   for (const s of CUSTOM_TARGET_SHAPES) {
     if (s.value === 'rect') continue; // intentional default
-    assert.ok(utilsSrc.includes(`case '${s.value}'`), s.value);
+    assert.ok(hasRenderer(s.value), s.value);
   }
 });
 
@@ -91,4 +93,15 @@ test('analytics: bias sign and grouping (FEAT-006)', () => {
   assert.equal(a.byCategory[0].key, 'Steel');
   assert.deepEqual(a.byBand.map(b => b.key), ['close', 'medium', 'long']);
   assert.equal(bandOf(850), 'extreme');
+});
+
+test('data dimensions match the drawn artwork exactly (animals, people, IPSC)', async () => {
+  const { buildArt } = await import('../js/target-art.js');
+  for (const t of targets) {
+    if (!ART_TYPES.has(t.svgType) || t.svgType === 'prs_popper') continue;
+    const a = buildArt(t.svgType, t);
+    const scale = t.svgType === 'ipsc_mini' ? 2 / 3 : 1; // mini is the metric art at 2/3 scale
+    assert.ok(Math.abs(a.widthCm * scale / 100 - t.width) < 0.002, `${t.id} width ${t.width} vs art ${(a.widthCm * scale / 100).toFixed(3)}`);
+    assert.ok(Math.abs(a.heightCm * scale / 100 - t.height) < 0.002, `${t.id} height ${t.height} vs art ${(a.heightCm * scale / 100).toFixed(3)}`);
+  }
 });

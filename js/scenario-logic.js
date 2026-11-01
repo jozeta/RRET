@@ -158,10 +158,20 @@ export function formatDistance(meters, unit, { long = false } = {}) {
   return `${m} ${long ? 'meters' : 'm'}`;
 }
 
-/** Target size in the user's unit, e.g. "0.45 m (45 cm)" / "17.7 in". */
+/**
+ * Target size in the user's unit with enough precision for the MIL formula:
+ * "36 mm", "22.5 cm", "1.64 m" / "1.42 in", "17.7 in". Rounding a 36 mm figure
+ * to "4 cm" made a perfect reading come out 11% wrong.
+ */
 export function formatSize(meters, unit) {
-  if (unit === 'imperial') return `${(meters * 39.3701).toFixed(1)} in`;
-  return `${meters} m (${Math.round(meters * 100)} cm)`;
+  if (unit === 'imperial') {
+    const inches = meters * 39.3701;
+    return `${inches < 10 ? inches.toFixed(2) : inches.toFixed(1)} in`;
+  }
+  const mm = meters * 1000;
+  if (mm < 100) return `${Math.round(mm * 10) / 10} mm`;
+  if (meters < 1) return `${Math.round(mm) / 10} cm`;
+  return `${Math.round(meters * 1000) / 1000} m`;
 }
 
 /**

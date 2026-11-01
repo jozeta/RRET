@@ -20,8 +20,10 @@ export const CUSTOM_TARGET_SHAPES = [
   { value: 'ipsc_metric', label: 'IPSC Metric Silhouette' },
   { value: 'ipsc_mini', label: 'IPSC Mini Silhouette' },
   { value: 'prs_popper', label: 'PRS Steel Popper' },
-  { value: 'mil_e_type', label: 'Military E-Type Silhouette' },
-  { value: 'soldier_silhouette', label: 'Soldier Silhouette' },
+  { value: 'ipsc_classic', label: 'IPSC Classic (Octagon)' },
+  { value: 'mil_e_type', label: 'Head-and-Shoulders Silhouette' },
+  { value: 'soldier_silhouette', label: 'Soldier (Standing)' },
+  { value: 'soldier_half', label: 'Soldier (Waist-up)' },
   { value: 'deer', label: 'Deer' },
   { value: 'elk', label: 'Elk' },
   { value: 'moose', label: 'Moose' },
@@ -263,7 +265,7 @@ export class TargetsController {
 
               <div class="d-flex gap-2">
                 <button type="button" class="btn btn-sm btn-tactical-outline flex-grow-1 btn-practice-target" data-target-id="${safeId}">
-                  Practice Scenario
+                  Practise
                 </button>
                 ${isCustom ? `
                   <button type="button" class="btn btn-sm btn-tactical-secondary btn-edit-target" data-target-id="${safeId}" aria-label="Edit ${safeName}" title="Edit">

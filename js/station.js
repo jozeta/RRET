@@ -88,7 +88,7 @@ export class StationController {
     const solution = document.getElementById('btn-show-solution');
     if (solution) solution.hidden = !visible;
     const title = document.getElementById('sim-card-title');
-    if (title && visible) title.textContent = 'Current Target Scenario';
+    if (title && visible) title.textContent = 'Target';
   }
 
   renderSetup() {
@@ -190,7 +190,7 @@ export class StationController {
       dot.classList.toggle('current', k === i);
     });
     const title = document.getElementById('sim-card-title');
-    if (title) title.textContent = `Station: figure ${i + 1} of ${n}`;
+    if (title) title.textContent = `Figure ${i + 1} of ${n}`;
     this.setFreePracticeControlsVisible(false);
     // Stations give no per-figure feedback, so the coach-mode reading isn't asked.
     const milRow = document.getElementById('sim-mil-reading-row');
@@ -296,7 +296,7 @@ export class StationController {
     if (!body) return;
     const max = figures.length * 100;
     body.innerHTML = `
-      <div class="mb-2 ${timeUp ? 'text-warning' : 'text-success'} tactical-font">${timeUp ? 'TIME!' : 'Station complete'}: ${total} / ${max} points</div>
+      <div class="mb-2 ${timeUp ? 'text-warning' : 'text-success'} tactical-font">${timeUp ? 'Time is up' : 'Station complete'}: ${total} of ${max} points</div>
       <div class="table-responsive">
         <table class="table table-dark table-sm align-middle mb-3 station-results">
           <thead><tr><th scope="col">#</th><th scope="col">Figure</th><th scope="col">Actual</th><th scope="col">Yours</th><th scope="col">Error</th><th scope="col">Pts</th></tr></thead>

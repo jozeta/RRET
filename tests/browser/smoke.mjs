@@ -145,6 +145,54 @@ await check('TEST-001: every procedural shape fills its declared box (BUG-001)',
   assert(short.length === 0, `shapes not filling their box: ${short.join(', ')}`);
 });
 
+await check('every target renders at exactly size x 1000 / distance MIL in the scope (all 86, 3 distances each)', async () => {
+  await load();
+  const bad = await evaluate(`(async () => {
+    const s = app.scope;
+    s.measurementMode = true;
+    const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const canvas = document.getElementById('scope-canvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = s.dpr || 1;
+    const failures = [];
+    let checked = 0;
+    for (const t of app.targetsController.builtInTargets) {
+      for (const d of [t.minDistance, Math.round((t.minDistance + t.maxDistance) / 2), t.maxDistance]) {
+        const milH = t.height * 1000 / d, milW = t.width * 1000 / d;
+        const zoom = Math.max(1, Math.min(25, 260 / (Math.max(milH, milW) * 18)));
+        if (Math.max(milH, milW) * 18 * zoom > s.canvasSize * 0.85) continue; // would not fit
+        s.setScenario({ target: t, distance: d, offsetX: 0, environment: 'field' });
+        s.setZoom(zoom);
+        for (let i = 0; i < 40 && !s.targetOffscreenSize; i++) await frame();
+        await frame(); await frame(); await frame();
+        s.render();
+        const W = canvas.width, H = canvas.height;
+        const px = ctx.getImageData(0, 0, W, H).data;
+        let x0 = W, y0 = H, x1 = -1, y1 = -1;
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+          const i = (y * W + x) * 4;
+          // anything clearly not the magenta measurement background
+          if (Math.abs(px[i] - 255) + px[i + 1] + Math.abs(px[i + 2] - 255) > 90) {
+            if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+          }
+        }
+        const ppm = s.pxPerMILAt() * dpr;
+        const expW = milW * ppm, expH = milH * ppm;
+        const gotW = x1 - x0 + 1, gotH = y1 - y0 + 1;
+        const tol = (e) => Math.max(2.5, e * 0.015);
+        checked++;
+        if (Math.abs(gotW - expW) > tol(expW) || Math.abs(gotH - expH) > tol(expH)) {
+          failures.push(t.id + '@' + d + 'm: ' + gotW + 'x' + gotH + 'px, expected ' + expW.toFixed(1) + 'x' + expH.toFixed(1));
+        }
+      }
+    }
+    s.measurementMode = false;
+    return { checked, failures };
+  })()`);
+  assert(bad.checked > 200, `only ${bad.checked} measurements`);
+  assert(bad.failures.length === 0, `${bad.failures.length} of ${bad.checked} wrong: ${bad.failures.slice(0, 8).join('; ')}`);
+});
+
 await check('TEST-002: one click on SUBMIT records exactly one round (BUG-002)', async () => {
   await load();
   await click('#sim-estimated-distance');
