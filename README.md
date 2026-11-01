@@ -74,7 +74,7 @@ $$\text{Distance (yards)} = \frac{\text{Target Size (yards)} \times 1000}{\text{
 
 Just want to try it? Skip all of this and use the **[live demo](https://jozeta.github.io/RRET/)** instead. The steps below are only for running it locally (e.g. to make changes).
 
-RRET is built as a zero-dependency, client-side web application using HTML5, CSS3, and ES6 JavaScript modules.
+RRET is a build-free, client-side web application using HTML5, CSS3, and ES6 JavaScript modules. The only third-party dependencies are Bootstrap 5.3 and Bootstrap Icons, loaded from the jsDelivr CDN (so an internet connection is needed for full styling).
 
 Because JavaScript ES6 modules (`import/export`) and JSON `fetch()` require HTTP/HTTPS origin security policies, the application should be served over a local HTTP server rather than opened directly as `file://`.
 
@@ -111,6 +111,16 @@ Because JavaScript ES6 modules (`import/export`) and JSON `fetch()` require HTTP
 
 ---
 
+## 🧪 Tests
+
+The MIL math, unit conversions, scoring bands and sanitisation helpers are covered by Node's built-in test runner (Node 18+, no install needed):
+
+```bash
+node --test tests/
+```
+
+---
+
 ## 📂 Project Structure
 
 ```text
@@ -132,6 +142,8 @@ RRET/
 │   ├── reticles.js         # Reticle catalog loader (data/reticles.json + fallback)
 │   ├── drawing.js          # Freehand canvas drawing tool for the Custom Target Editor
 │   └── utils.js            # Procedural SVG target renderers, Web Audio, MIL math & HTML-escaping helpers
+├── tests/
+│   └── utils.test.mjs      # Unit tests for MIL math, scoring & helpers
 └── data/
     ├── targets.json        # Built-in target database (86 targets with metric specifications)
     └── reticles.json       # Reticle specifications & metadata
