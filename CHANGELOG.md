@@ -23,6 +23,8 @@ Audit fixes and new training features (pull request #1).
 - Animals redrawn as true-to-proportion silhouettes in natural colours, with realistic sizes (height measured to the top of the antlers/ears). Previous sizes were far too small, e.g. a 0.9 m deer and a 2.0 m moose including antlers.
 - People, IPSC (metric, mini and an octagonal classic at 46 × 58 cm), PRS poppers and steel gongs redrawn; field figures get a matte painted finish.
 - Known sizes on the scenario card no longer round misleadingly (a 36 mm figure showed as "4 cm").
+- True-size optics are now the default: at 1× a target looks as large as to the naked eye, and at 10× ten times larger, assuming a typical screen at 60 cm (calibrate in Settings for exact size). The old enlarged scale (about 8× a real 1× view) remains as an option, and saved settings switch to true size once.
+- Reticle numerals are hidden when magnification is too low for them to be readable.
 - The landscape is built to real-world scale behind the target: trees, buildings, berms and mountains have real sizes and distances, the horizon is at eye level and the target stands on the ground in front of them.
 
 ### Design

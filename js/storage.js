@@ -14,7 +14,7 @@ const STORAGE_KEYS = {
   BACKUP: 'rret_backup_v1'
 };
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 export const HISTORY_LIMIT = 1000;
 
 const DEFAULT_SETTINGS = {
@@ -26,10 +26,13 @@ const DEFAULT_SETTINGS = {
   zoomSensitivity: 1.0,
   panSensitivity: 1.0,
   soundEnabled: true,
-  // Realistic optics (FEAT-001): 'arcade' keeps the original fixed 18 px/MIL scale.
-  opticsMode: 'arcade',
-  scopeProfile: 'precision',
+  // Optics scale. 'realistic' (default): the target appears as large as through a
+  // real scope at that magnification, viewed from viewingDistanceCm. 'arcade': the
+  // original enlarged scale (1 MIL = 18 px x zoom, roughly 8x a real 1x view).
+  opticsMode: 'realistic',
+  scopeProfile: 'full',
   screenPxPerMm: null, // set by the calibration slider
+  screenCalibrated: false, // true once the user has actually moved the slider
   viewingDistanceCm: 60,
   // Coach mode (FEAT-003): also ask for the MIL reading.
   coachMode: false
@@ -106,22 +109,39 @@ export class StorageManager {
     let version = 1;
     try { version = Number(localStorage.getItem(STORAGE_KEYS.SCHEMA)) || 1; } catch (e) { return; }
     if (version >= SCHEMA_VERSION) return;
-
-    const history = readJSON(STORAGE_KEYS.HISTORY, []);
     try {
-      if (!localStorage.getItem(STORAGE_KEYS.BACKUP) && (history.length || localStorage.getItem(STORAGE_KEYS.STATS))) {
-        writeJSON(STORAGE_KEYS.BACKUP, {
-          createdAt: new Date().toISOString(),
-          history,
-          stats: readJSON(STORAGE_KEYS.STATS, null)
-        });
-      }
-      writeJSON(STORAGE_KEYS.HISTORY, Array.isArray(history) ? dedupeHistory(history) : []);
-      localStorage.removeItem(STORAGE_KEYS.STATS);
+      if (version < 2) this.migrateToV2();
+      if (version < 3) this.migrateToV3();
       localStorage.setItem(STORAGE_KEYS.SCHEMA, String(SCHEMA_VERSION));
     } catch (e) {
       console.warn('Storage migration failed', e);
     }
+  }
+
+  /**
+   * Schema 3: true-size optics become the default. Every saved settings object
+   * carried opticsMode 'arcade' (the only mode until now, saved along with any
+   * other setting), so switch it once; users can still choose the enlarged view.
+   */
+  static migrateToV3() {
+    const stored = readJSON(STORAGE_KEYS.SETTINGS, null);
+    if (!stored || typeof stored !== 'object') return;
+    if (stored.opticsMode === 'arcade' || stored.opticsMode === undefined) {
+      writeJSON(STORAGE_KEYS.SETTINGS, { ...stored, opticsMode: 'realistic', scopeProfile: 'full' });
+    }
+  }
+
+  static migrateToV2() {
+    const history = readJSON(STORAGE_KEYS.HISTORY, []);
+    if (!localStorage.getItem(STORAGE_KEYS.BACKUP) && (history.length || localStorage.getItem(STORAGE_KEYS.STATS))) {
+      writeJSON(STORAGE_KEYS.BACKUP, {
+        createdAt: new Date().toISOString(),
+        history,
+        stats: readJSON(STORAGE_KEYS.STATS, null)
+      });
+    }
+    writeJSON(STORAGE_KEYS.HISTORY, Array.isArray(history) ? dedupeHistory(history) : []);
+    localStorage.removeItem(STORAGE_KEYS.STATS);
   }
 
   static getSettings() {

@@ -47,8 +47,8 @@ export class SettingsController {
     if (el('zoom-sensitivity')) el('zoom-sensitivity').value = s.zoomSensitivity;
     if (el('pan-sensitivity')) el('pan-sensitivity').value = s.panSensitivity;
     if (el('sound-toggle')) el('sound-toggle').checked = s.soundEnabled;
-    if (el('optics-mode')) el('optics-mode').value = s.opticsMode || 'arcade';
-    if (el('scope-profile')) el('scope-profile').value = s.scopeProfile || 'precision';
+    if (el('optics-mode')) el('optics-mode').value = s.opticsMode || 'realistic';
+    if (el('scope-profile')) el('scope-profile').value = s.scopeProfile || 'full';
     if (el('calib-px')) el('calib-px').value = s.screenPxPerMm ? Math.round(s.screenPxPerMm * CARD_WIDTH_MM) : DEFAULT_CALIB_PX;
     if (el('viewing-distance')) el('viewing-distance').value = s.viewingDistanceCm || 60;
 
@@ -94,7 +94,7 @@ export class SettingsController {
     }
   }
 
-  handleSettingChange() {
+  handleSettingChange(e) {
     const form = document.getElementById('settings-form');
     if (!form) return;
     const el = (name) => form.elements[name];
@@ -116,6 +116,8 @@ export class SettingsController {
       opticsMode: el('optics-mode') ? el('optics-mode').value : this.settings.opticsMode,
       scopeProfile: el('scope-profile') ? el('scope-profile').value : this.settings.scopeProfile,
       screenPxPerMm: num('calib-px', DEFAULT_CALIB_PX) / CARD_WIDTH_MM,
+      // Only moving the calibration slider counts as calibrating the screen.
+      screenCalibrated: this.settings.screenCalibrated || !!(e && e.target && e.target.name === 'calib-px'),
       viewingDistanceCm: Math.min(200, Math.max(20, num('viewing-distance', this.settings.viewingDistanceCm || 60)))
     };
 
@@ -128,6 +130,7 @@ export class SettingsController {
     this.applySoundSetting();
 
     if (this.app && this.app.scope) this.app.scope.updateSettings(updated);
+    if (this.app && this.app.updateOpticsNote) this.app.updateOpticsNote();
     // Units changed: refresh everything that displays distances (audit BUG-018).
     if (updated.unit !== prevUnit && this.app) {
       if (this.app.training) this.app.training.refreshUnits();

@@ -159,8 +159,9 @@ await check('every target renders at exactly size x 1000 / distance MIL in the s
     for (const t of app.targetsController.builtInTargets) {
       for (const d of [t.minDistance, Math.round((t.minDistance + t.maxDistance) / 2), t.maxDistance]) {
         const milH = t.height * 1000 / d, milW = t.width * 1000 / d;
-        const zoom = Math.max(1, Math.min(25, 260 / (Math.max(milH, milW) * 18)));
-        if (Math.max(milH, milW) * 18 * zoom > s.canvasSize * 0.85) continue; // would not fit
+        const ppm1 = s.pxPerMILAt(1);
+        const zoom = Math.max(1, Math.min(25, 260 / (Math.max(milH, milW) * ppm1)));
+        if (Math.max(milH, milW) * ppm1 * zoom > s.canvasSize * 0.85) continue; // would not fit
         s.setScenario({ target: t, distance: d, offsetX: 0, environment: 'field' });
         s.setZoom(zoom);
         for (let i = 0; i < 40 && !s.targetOffscreenSize; i++) await frame();
@@ -370,6 +371,12 @@ await check('analytics render after a few rounds (FEAT-006)', async () => {
   await click('.nav-link-tactical[data-page-target="home"]');
   await sleep(300);
   assert(await evaluate(`document.querySelectorAll('#analytics-container svg .chart-bar').length`) > 0, 'no bars');
+});
+
+await check('default scale is true size: 1x shows 1 MIL as ~2.3 px at 60 cm on a 96-dpi-equivalent screen', async () => {
+  await load();
+  const r = await evaluate(`({ mode: app.scope.opticsMode, ppm1: app.scope.pxPerMILAt(1), min: app.scope.minZoom, max: app.scope.maxZoom, note: !document.getElementById('optics-note').hidden })`);
+  assert(r.mode === 'realistic' && Math.abs(r.ppm1 - 0.6 * 96 / 25.4) < 1e-6 && r.min === 1 && r.max === 25 && r.note, JSON.stringify(r));
 });
 
 await check('realistic optics uses the calibration (FEAT-001)', async () => {

@@ -7,7 +7,8 @@ import { renderTargetSVGString, isSafeImageDataURI, sfx } from './utils.js';
 
 /** Real-world-ish scope profiles for realistic optics mode (FEAT-001). */
 export const SCOPE_PROFILES = {
-  arcade: { label: 'Arcade (1–25x, enlarged)', minZoom: 1, maxZoom: 25 },
+  arcade: { label: 'Enlarged (1–25x)', minZoom: 1, maxZoom: 25 },
+  full: { label: 'Full range 1–25x', minZoom: 1, maxZoom: 25 },
   lpvo: { label: 'LPVO 1–10x', minZoom: 1, maxZoom: 10 },
   hunting: { label: 'Hunting 3–18x', minZoom: 3, maxZoom: 18 },
   precision: { label: 'Precision 5–25x', minZoom: 5, maxZoom: 25 }
@@ -52,8 +53,8 @@ export class ScopeEngine {
     this.zoom = 1;
     this.minZoom = 1;
     this.maxZoom = 25;
-    this.opticsMode = 'arcade';
-    this.scopeProfile = 'arcade';
+    this.opticsMode = 'realistic';
+    this.scopeProfile = 'full';
     this.screenPxPerMm = null;
     this.viewingDistanceCm = 60;
 
@@ -818,6 +819,9 @@ export class ScopeEngine {
     const center = size / 2;
     // Pixels per MIL at current zoom in FFP
     const pxPerMIL = this.pxPerMILAt();
+    // Numerals sit 1-2 MIL apart; below this spacing they overlap into clutter
+    // (on a real FFP scope they also become unreadably small at low power).
+    this.reticleLabelsVisible = pxPerMIL >= 16;
 
     const strokeColor = this.reticleColor || '#ff2a2a';
     const brightness = this.reticleBrightness;
@@ -891,6 +895,7 @@ export class ScopeEngine {
   }
 
   createHighContrastText(x, y, text, color, fontSize = 11, anchor = "middle") {
+    if (this.reticleLabelsVisible === false) return '';
     return `
       <text x="${x}" y="${y}" fill="#000000" font-size="${fontSize}" font-weight="900" font-family="'Roboto Mono', monospace" text-anchor="${anchor}" stroke="#000000" stroke-width="2.5" paint-order="stroke fill">${text}</text>
       <text x="${x}" y="${y}" fill="${color}" font-size="${fontSize}" font-weight="700" font-family="'Roboto Mono', monospace" text-anchor="${anchor}">${text}</text>

@@ -57,6 +57,8 @@ class Application {
     this.tutorial.init();
     this.analytics.init();
 
+    this.updateOpticsNote();
+
     // 5. Navigation & stats
     this.bindNavigation();
     this.bindScopeControlsBar();
@@ -87,6 +89,14 @@ class Application {
 
     const settingsSelect = document.querySelector('select[name="reticle-select"]');
     if (settingsSelect) settingsSelect.innerHTML = optionsHTML;
+  }
+
+  /** Shows the "calibrate your screen" hint while true-size optics are uncalibrated. */
+  updateOpticsNote() {
+    const note = document.getElementById('optics-note');
+    if (!note) return;
+    const s = StorageManager.getSettings();
+    note.hidden = !(s.opticsMode === 'realistic' && !s.screenCalibrated);
   }
 
   /** Changes and persists the reticle from anywhere (simulator, Learn page). */

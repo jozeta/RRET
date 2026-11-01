@@ -262,6 +262,9 @@
                 </div>
               </div>
             </div>
+            <p class="optics-note small text-muted mb-0 mt-2" id="optics-note" hidden>
+              Sizes assume a typical screen seen from 60 cm. <a href="#settings" data-page-target="settings">Calibrate your screen</a> for exact true size.
+            </p>
           </div>
         </div>
 
@@ -859,13 +862,14 @@
                     <div class="col-md-6">
                       <label for="settings-optics-mode" class="form-label small text-muted mb-1">Magnification scale</label>
                       <select id="settings-optics-mode" name="optics-mode" class="form-select-tactical w-100">
-                        <option value="arcade">Arcade: enlarged view (original)</option>
-                        <option value="realistic">Realistic: target looks as big as through a real scope</option>
+                        <option value="realistic">True size: as large as through a real scope (recommended)</option>
+                        <option value="arcade">Enlarged: about 8× bigger, easier to see</option>
                       </select>
                     </div>
                     <div class="col-md-6">
                       <label for="settings-scope-profile" class="form-label small text-muted mb-1">Scope (realistic mode)</label>
                       <select id="settings-scope-profile" name="scope-profile" class="form-select-tactical w-100">
+                        <option value="full">Full range 1–25x</option>
                         <option value="precision">Precision 5–25x</option>
                         <option value="hunting">Hunting 3–18x</option>
                         <option value="lpvo">LPVO 1–10x</option>

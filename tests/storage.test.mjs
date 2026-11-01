@@ -76,3 +76,18 @@ test('simulator preferences persist (BUG-017)', () => {
   assert.equal(p.distance, 'long');
   assert.equal(p.environment, 'random');
 });
+
+test('true-size optics are the default, and old saved settings switch once', () => {
+  assert.equal(StorageManager.getSettings().opticsMode, 'realistic');
+  assert.equal(StorageManager.getSettings().scopeProfile, 'full');
+  localStorage.setItem('rret_schema', '2');
+  localStorage.setItem('rret_settings_v1', JSON.stringify({ opticsMode: 'arcade', unit: 'imperial' }));
+  StorageManager.migrate();
+  const s = StorageManager.getSettings();
+  assert.equal(s.opticsMode, 'realistic');
+  assert.equal(s.unit, 'imperial');
+  // A later deliberate choice of the enlarged view is kept.
+  StorageManager.saveSettings({ opticsMode: 'arcade' });
+  StorageManager.migrate();
+  assert.equal(StorageManager.getSettings().opticsMode, 'arcade');
+});
