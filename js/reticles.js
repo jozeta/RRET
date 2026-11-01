@@ -1,85 +1,10 @@
 /* ==========================================================================
-   Reticle Catalog Loader
-   Single source of truth for reticle id/name/description/features, shared by
-   the simulator's quick-switch dropdown, the settings default-reticle dropdown,
-   and the Learn page comparison matrix. Backed by data/reticles.json, with an
-   inline fallback so the app still works when opened without an HTTP server
-   (fetch() of local JSON fails under file://).
+   Reticle catalogue. The designs, their scale legends and help text all live in
+   js/reticle-designs.js, so the drawing, the readout and the help can't drift.
    ========================================================================== */
 
-const FALLBACK_RETICLES = [
-  {
-    id: 'mil_dot',
-    name: 'MIL Dot Reticle',
-    description: 'Traditional 1 MIL spacing round dots with 0.5 MIL tick marks and heavy outer duplex posts.',
-    type: 'svg',
-    features: ['1 MIL Dots', '0.5 MIL Hash Marks', 'Heavy Duplex Posts']
-  },
-  {
-    id: 'christmas_tree',
-    name: 'Christmas Tree Grid (Horner / PRS)',
-    description: 'Tactical holdover grid with progressive windage dots at every 1 MIL elevation drop down to 10 MILs.',
-    type: 'svg',
-    features: ['1 MIL / 0.2 MIL Hashes', 'Holdover Grid', 'Windage Dots', 'Numbered MILs']
-  },
-  {
-    id: 'tremor_style',
-    name: 'Tremor Style Tactical Milling',
-    description: 'Advanced precision reticle featuring rapid wind holds, fine 0.2 MIL reticle subtensions, and milling brackets.',
-    type: 'svg',
-    features: ['0.2 MIL Milling Scale', 'Rapid Wind Dots', 'Moving Target Holds']
-  },
-  {
-    id: 'mrad_grid',
-    name: 'Simple MRAD Grid',
-    description: 'Clean, uncluttered 0.5 MRAD grid lines with clear numeric callouts every 2 MILs.',
-    type: 'svg',
-    features: ['0.5 MRAD Hashes', 'Clean Center Dot', 'Numeric Labels']
-  },
-  {
-    id: 'duplex_bdc',
-    name: 'Duplex BDC Hunting Reticle',
-    description: 'Classic duplex posts with Bullet Drop Compensator (BDC) holdover markers from 100m to 600m.',
-    type: 'svg',
-    features: ['Heavy Duplex Bars', '100m-600m BDC Hash Lines', 'Uncluttered Center']
-  },
-  {
-    id: 'german_number4',
-    name: 'German #4 Hunting Reticle',
-    description: 'Three heavy outer posts with fine central crosshairs for ultra-fast target acquisition in woods or brush.',
-    type: 'svg',
-    features: ['Heavy Side & Bottom Bars', 'Thin Center Crosshair', 'High Contrast Centering']
-  },
-  {
-    id: 'circle_dot',
-    name: 'Circle-Dot Horseshoe Tactical',
-    description: 'Illuminated 65 MOA / 18 MIL speed horseshoe ring surrounding a 0.2 MIL center dot for fast CQB and holdovers.',
-    type: 'svg',
-    features: ['Speed Horseshoe Ring', '0.2 MIL Center Dot', 'MIL Ranging Hashes']
-  },
-  {
-    id: 'crosshair_only',
-    name: 'Fine Crosshair Only',
-    description: 'Ultra-thin precision crosshair with 1 MIL tick marks for minimalist target acquisition.',
-    type: 'svg',
-    features: ['Ultra-thin lines', '0.05 MIL Center Dot', 'Minimal Subtensions']
-  }
-];
+import { RETICLE_CATALOG } from './reticle-designs.js';
 
-/**
- * Fetches data/reticles.json. Falls back to the built-in list above (kept in
- * sync with the JSON file) if the fetch fails, e.g. when the app is opened
- * via file:// instead of a local HTTP server.
- */
 export async function loadReticles() {
-  try {
-    const resp = await fetch('data/reticles.json');
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = await resp.json();
-    if (Array.isArray(data) && data.length > 0) return data;
-    return FALLBACK_RETICLES;
-  } catch (e) {
-    console.warn('Failed to load reticles.json, using built-in fallback', e);
-    return FALLBACK_RETICLES;
-  }
+  return RETICLE_CATALOG;
 }

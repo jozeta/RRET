@@ -22,6 +22,7 @@ export class TargetDrawingCanvas {
     this.startY = 0;
     this.snapshot = null;
     this.onChange = null; // set by caller; fires after each committed stroke/shape
+    this.onUserEdit = null; // set by caller; fires when the user starts a stroke
 
     this.blank();
     this.bindEvents();
@@ -44,6 +45,7 @@ export class TargetDrawingCanvas {
   /** User-facing "Clear" action: blanks the canvas and records it as undoable. */
   clear() {
     this.undoStack.push(this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height));
+    if (this.undoStack.length > MAX_UNDO_STATES) this.undoStack.shift();
     this.blank();
     if (this.onChange) this.onChange();
   }
@@ -142,6 +144,7 @@ export class TargetDrawingCanvas {
       e.preventDefault();
       this.canvas.setPointerCapture(e.pointerId);
       this.isDrawing = true;
+      if (this.onUserEdit) this.onUserEdit();
       const { x, y } = this.getPos(e);
       this.startX = x;
       this.startY = y;
