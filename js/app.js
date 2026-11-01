@@ -13,6 +13,7 @@ import { AnalyticsController } from './analytics.js';
 import { loadReticles } from './reticles.js';
 import { sfx, escapeHTML } from './utils.js';
 import { formatDistance } from './scenario-logic.js';
+import { APP_VERSION } from './version.js';
 
 const PAGES = ['home', 'simulator', 'learn', 'targets', 'settings', 'about'];
 
@@ -32,6 +33,10 @@ class Application {
   }
 
   async init() {
+    // Version: visible in the footer/About page so it's easy to tell which build a tab runs.
+    document.querySelectorAll('.app-version').forEach(el => { el.textContent = `v${APP_VERSION}`; });
+    console.info(`RRET v${APP_VERSION}`);
+
     // 0. Reticle catalog first: it fills the <select>s the settings form writes to.
     this.reticles = await loadReticles();
     this.populateReticleSelects();

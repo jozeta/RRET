@@ -1,7 +1,8 @@
 /* RRET service worker (FEAT-008): makes the app work offline after one visit.
    tests/pwa.test.mjs checks that every app file is precached. Bump CACHE_VERSION
    when files are added/removed or vendor assets are upgraded. */
-const CACHE_VERSION = 'rret-v2';
+// Keep in sync with js/version.js (enforced by tests/version.test.mjs).
+const CACHE_VERSION = 'rret-2.0.0';
 const PRECACHE = [
   './',
   'index.html',
@@ -25,6 +26,7 @@ const PRECACHE = [
   'js/tutorial.js',
   'js/ui.js',
   'js/utils.js',
+  'js/version.js',
   'data/reticles.json',
   'data/targets.json',
   'vendor/bootstrap/bootstrap.bundle.min.js',
