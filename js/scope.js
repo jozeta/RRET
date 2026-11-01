@@ -735,19 +735,44 @@ export class ScopeEngine {
     ctx.restore();
   }
 
+  /**
+   * Weather particles (snow flakes, rain streaks) placed in the world on a repeating
+   * 700x700 scene-unit tile, so turning the scope moves them with everything else.
+   * Their on-screen size is capped: they are close to the shooter and would be out
+   * of focus, not magnified, at high power.
+   */
+  forEachWeatherParticle(w, h, count, salt, fn) {
+    const { k, x, groundY } = this.scene;
+    const tile = 700;
+    const pxPerTile = tile * k;
+    // Tile indices covering the screen horizontally and vertically.
+    const ux0 = Math.floor((-x(0)) / pxPerTile) - 1;
+    const ux1 = Math.ceil((w - x(0)) / pxPerTile) + 1;
+    const vy0 = Math.floor((0 - groundY) / pxPerTile) - 1;
+    const vy1 = Math.ceil((h - groundY) / pxPerTile) + 1;
+    if ((ux1 - ux0) * (vy1 - vy0) > 400) return; // extremely zoomed out: skip
+    for (let tx = ux0; tx <= ux1; tx++) {
+      for (let ty = vy0; ty <= vy1; ty++) {
+        for (let i = 0; i < count; i++) {
+          const px = x(tx * tile + this.detailSeed(i, salt) * tile);
+          const py = groundY + (ty * tile + this.detailSeed(i, salt + 1) * tile) * k;
+          if (px < -20 || px > w + 20 || py < -20 || py > h + 20) continue;
+          fn(px, py, this.detailSeed(i, salt + 2));
+        }
+      }
+    }
+  }
+
   drawSnowfall(w, h) {
-    // Falling snow is near the shooter, so it stays in screen space.
     const ctx = this.ctx;
+    const size = Math.min(1, this.scene.k);
     ctx.save();
     ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    for (let i = 0; i < 40; i++) {
-      const seedX = this.detailSeed(i, 1);
-      const seedY = this.detailSeed(i, 2);
-      const r = 1 + (seedX * seedY) * 1.5;
+    this.forEachWeatherParticle(w, h, 60, 11, (px, py, r) => {
       ctx.beginPath();
-      ctx.arc(seedX * w, seedY * h, r, 0, Math.PI * 2);
+      ctx.arc(px, py, (1 + r * 1.5) * Math.max(0.6, size) * 1.4, 0, Math.PI * 2);
       ctx.fill();
-    }
+    });
     ctx.restore();
   }
 
@@ -778,16 +803,15 @@ export class ScopeEngine {
     if (this.environment === 'fog') {
       ctx.fillStyle = 'rgba(210, 220, 225, 0.45)';
       ctx.fillRect(0, 0, w, h);
-    } else if (this.environment === 'rain') {
+    } else if (this.environment === 'rain' && this.scene) {
+      const len = 16 * Math.max(0.6, Math.min(1, this.scene.k));
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      for (let i = 0; i < 40; i++) {
-        const rx = (i * 37) % w;
-        const ry = (i * 59) % h;
-        ctx.moveTo(rx, ry);
-        ctx.lineTo(rx - 4, ry + 16);
-      }
+      this.forEachWeatherParticle(w, h, 60, 21, (px, py) => {
+        ctx.moveTo(px, py);
+        ctx.lineTo(px - len / 4, py + len);
+      });
       ctx.stroke();
     }
   }
