@@ -105,3 +105,7 @@ test('data dimensions match the drawn artwork exactly (animals, people, IPSC)', 
     assert.ok(Math.abs(a.heightCm * scale / 100 - t.height) < 0.002, `${t.id} height ${t.height} vs art ${(a.heightCm * scale / 100).toFixed(3)}`);
   }
 });
+
+test('every reticle states what its marks are worth', () => {
+  for (const r of reticles) assert.ok(typeof r.scale === 'string' && /MIL/.test(r.scale), `${r.id} has no scale legend`);
+});

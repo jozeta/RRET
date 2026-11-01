@@ -163,6 +163,7 @@ export class ScopeEngine {
       if (simSelect) simSelect.value = settings.reticle;
       const settingsSelect = document.querySelector('select[name="reticle-select"]');
       if (settingsSelect) settingsSelect.value = settings.reticle;
+      this.updateHud();
     }
     if (settings.reticleColor) this.reticleColor = settings.reticleColor;
     if (settings.reticleBrightness !== undefined) this.reticleBrightness = settings.reticleBrightness;
@@ -216,10 +217,19 @@ export class ScopeEngine {
     if (!Number.isFinite(zoomLevel)) return;
     this.zoom = Math.max(this.minZoom, Math.min(this.maxZoom, zoomLevel));
     if (this.hudElement) {
-      this.hudElement.textContent = `${this.zoom.toFixed(1)}×`;
+      this.updateHud();
     }
     this.updateZoomButtonsUI();
     this.requestRender({ reticle: true });
+  }
+
+  /** Magnification plus what the reticle's marks are worth: at high power the
+   *  numbered marks are usually outside the view, so the spacing must be stated. */
+  updateHud() {
+    if (!this.hudElement) return;
+    const entry = (this.reticleCatalog || []).find(r => r.id === this.reticleType);
+    const scale = entry && entry.scale ? ` · ${entry.scale}` : '';
+    this.hudElement.textContent = `${this.zoom.toFixed(1)}×${scale}`;
   }
 
   updateZoomButtonsUI() {

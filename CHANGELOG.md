@@ -25,6 +25,7 @@ Audit fixes and new training features (pull request #1).
 - Known sizes on the scenario card no longer round misleadingly (a 36 mm figure showed as "4 cm").
 - True-size optics are now the default: at 1× a target looks as large as to the naked eye, and at 10× ten times larger, assuming a typical screen at 60 cm (calibrate in Settings for exact size). The old enlarged scale (about 8× a real 1× view) remains as an option, and saved settings switch to true size once.
 - Reticle numerals are hidden when magnification is too low for them to be readable.
+- The scope readout states what the reticle's marks are worth (for example "25.0× · fine ticks 0.2 MIL"), because at high power the numbered marks are often outside the view. Corrected two reticle descriptions that didn't match the drawn reticle.
 - The landscape is built to real-world scale behind the target: trees, buildings, berms and mountains have real sizes and distances, the horizon is at eye level and the target stands on the ground in front of them.
 
 ### Design

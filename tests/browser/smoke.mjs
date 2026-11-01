@@ -379,6 +379,13 @@ await check('default scale is true size: 1x shows 1 MIL as ~2.3 px at 60 cm on a
   assert(r.mode === 'realistic' && Math.abs(r.ppm1 - 0.6 * 96 / 25.4) < 1e-6 && r.min === 1 && r.max === 25 && r.note, JSON.stringify(r));
 });
 
+await check('scope readout states the reticle mark spacing', async () => {
+  await load();
+  await evaluate(`app.setReticle('tremor_style'); app.scope.setZoom(25)`);
+  const hud = await evaluate(`document.getElementById('scope-hud-mag').textContent`);
+  assert(/25\.0×/.test(hud) && /0\.2 MIL/.test(hud), hud);
+});
+
 await check('realistic optics uses the calibration (FEAT-001)', async () => {
   const ppm = await evaluate(`(() => { app.scope.updateSettings({ opticsMode: 'realistic', screenPxPerMm: 4, viewingDistanceCm: 50, scopeProfile: 'precision' }); const v = { ppm: app.scope.pxPerMILAt(10), min: app.scope.minZoom }; app.scope.updateSettings({ opticsMode: 'arcade' }); return v; })()`);
   assert(Math.abs(ppm.ppm - 20) < 1e-9 && ppm.min === 5, JSON.stringify(ppm));

@@ -39,6 +39,7 @@ class Application {
 
     // 0. Reticle catalog first: it fills the <select>s the settings form writes to.
     this.reticles = await loadReticles();
+    this.scope.reticleCatalog = this.reticles;
     this.populateReticleSelects();
 
     // 1. Settings & theme

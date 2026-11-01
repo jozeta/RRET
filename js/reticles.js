@@ -10,6 +10,7 @@
 const FALLBACK_RETICLES = [
   {
     id: 'mil_dot',
+    scale: 'dots 1 MIL, hashes ½',
     name: 'MIL Dot Reticle',
     description: 'Traditional 1 MIL spacing round dots with 0.5 MIL tick marks and heavy outer duplex posts.',
     type: 'svg',
@@ -17,13 +18,15 @@ const FALLBACK_RETICLES = [
   },
   {
     id: 'christmas_tree',
+    scale: 'ticks 1 MIL, ½ MIL',
     name: 'Christmas Tree Grid (Horner / PRS)',
     description: 'Tactical holdover grid with progressive windage dots at every 1 MIL elevation drop down to 10 MILs.',
     type: 'svg',
-    features: ['1 MIL / 0.2 MIL Hashes', 'Holdover Grid', 'Windage Dots', 'Numbered MILs']
+    features: ['1 MIL / 0.5 MIL Hashes', 'Holdover Grid', 'Windage Dots', 'Numbered MILs']
   },
   {
     id: 'tremor_style',
+    scale: 'fine ticks 0.2 MIL',
     name: 'Tremor Style Tactical Milling',
     description: 'Advanced precision reticle featuring rapid wind holds, fine 0.2 MIL reticle subtensions, and milling brackets.',
     type: 'svg',
@@ -31,6 +34,7 @@ const FALLBACK_RETICLES = [
   },
   {
     id: 'mrad_grid',
+    scale: 'ticks ½ MIL',
     name: 'Simple MRAD Grid',
     description: 'Clean, uncluttered 0.5 MRAD grid lines with clear numeric callouts every 2 MILs.',
     type: 'svg',
@@ -38,6 +42,7 @@ const FALLBACK_RETICLES = [
   },
   {
     id: 'duplex_bdc',
+    scale: 'posts 4 MIL from centre',
     name: 'Duplex BDC Hunting Reticle',
     description: 'Classic duplex posts with Bullet Drop Compensator (BDC) holdover markers from 100m to 600m.',
     type: 'svg',
@@ -45,6 +50,7 @@ const FALLBACK_RETICLES = [
   },
   {
     id: 'german_number4',
+    scale: 'ticks 1 MIL',
     name: 'German #4 Hunting Reticle',
     description: 'Three heavy outer posts with fine central crosshairs for ultra-fast target acquisition in woods or brush.',
     type: 'svg',
@@ -52,6 +58,7 @@ const FALLBACK_RETICLES = [
   },
   {
     id: 'circle_dot',
+    scale: 'ticks 1 MIL',
     name: 'Circle-Dot Horseshoe Tactical',
     description: 'Illuminated 65 MOA / 18 MIL speed horseshoe ring surrounding a 0.2 MIL center dot for fast CQB and holdovers.',
     type: 'svg',
@@ -59,10 +66,11 @@ const FALLBACK_RETICLES = [
   },
   {
     id: 'crosshair_only',
+    scale: 'ticks 1 MIL',
     name: 'Fine Crosshair Only',
     description: 'Ultra-thin precision crosshair with 1 MIL tick marks for minimalist target acquisition.',
     type: 'svg',
-    features: ['Ultra-thin lines', '0.05 MIL Center Dot', 'Minimal Subtensions']
+    features: ['Ultra-thin lines', 'Fine centre dot', 'Minimal Subtensions']
   }
 ];
 
