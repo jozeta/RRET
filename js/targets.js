@@ -62,7 +62,8 @@ function sanitizeImportedTarget(t) {
   const maxDistance = Number.isFinite(Number(t.maxDistance)) && Number(t.maxDistance) > 0 ? Number(t.maxDistance) : undefined;
 
   return {
-    id: typeof t.id === 'string' && t.id ? t.id : 'custom_' + Date.now() + Math.random().toString(36).substr(2, 4),
+    // Restrict ids to a safe charset: they end up in HTML attributes and DOM lookups.
+    id: typeof t.id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(t.id) ? t.id : 'custom_' + Date.now() + Math.random().toString(36).slice(2, 6),
     name,
     category,
     height,
@@ -278,18 +279,18 @@ export class TargetsController {
               </div>
 
               <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-tactical-outline flex-grow-1 btn-practice-target" data-target-id="${t.id}">
+                <button class="btn btn-sm btn-tactical-outline flex-grow-1 btn-practice-target" data-target-id="${escapeHTML(t.id)}">
                   Practice Scenario
                 </button>
                 ${isCustom ? `
-                  <button class="btn btn-sm btn-tactical-secondary btn-edit-target" data-target-id="${t.id}">
+                  <button class="btn btn-sm btn-tactical-secondary btn-edit-target" data-target-id="${escapeHTML(t.id)}">
                     ✏️
                   </button>
-                  <button class="btn btn-sm btn-outline-danger btn-delete-target" data-target-id="${t.id}">
+                  <button class="btn btn-sm btn-outline-danger btn-delete-target" data-target-id="${escapeHTML(t.id)}">
                     🗑️
                   </button>
                 ` : `
-                  <button class="btn btn-sm btn-tactical-secondary btn-duplicate-target" data-target-id="${t.id}" title="Duplicate as Custom">
+                  <button class="btn btn-sm btn-tactical-secondary btn-duplicate-target" data-target-id="${escapeHTML(t.id)}" title="Duplicate as Custom">
                     📋
                   </button>
                 `}
