@@ -5,6 +5,8 @@ To release: bump it there, in `package.json` and in `sw.js` (`CACHE_VERSION`),
 add an entry below, and tag the merge commit `vX.Y.Z`. `npm test` fails if
 these disagree.
 
+## Unreleased
+
 ## 2.0.0 — 2026-11-01
 
 Audit fixes and new training features (pull request #1).
