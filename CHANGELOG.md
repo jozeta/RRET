@@ -7,6 +7,8 @@ these disagree.
 
 ## Unreleased
 
+- ESLint (flat config, with the no-unsanitized rule) as a dev-only tool; CI runs `npm run lint`
+
 ## 2.0.0 — 2026-11-01
 
 Audit fixes and new training features (pull request #1).

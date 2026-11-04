@@ -52,3 +52,16 @@ Core formula: `distance (m) = size (m) × 1000 / MIL reading` (height or width).
 - Storage format changes need a migration in `js/storage.js`; imports stay validated,
   size-limited and idempotent (built-ins never duplicated).
 - Hunting-category targets always roll Forest or Mountain environments.
+
+## App standards
+
+This repo follows the app standards in `~/Desktop/code/tools/standards/STANDARDS.md` (rule IDs,
+severities; decisions and waivers in `.claude-standards`). `claude-check --repo .` checks it.
+
+```sh
+npm ci && npm run lint   # ESLint (dev-only), incl. the no-unsanitized rule; CI runs it too
+npm run test:all         # the tests CI runs
+```
+
+Unsafe DOM sinks and unused variables are lint **warnings** for now (existing code); new code
+shouldn't add any. Errors (eval, undefined names, parse errors) fail CI.
