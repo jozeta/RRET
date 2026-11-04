@@ -46,14 +46,18 @@ if (!chromePath) { console.error('No Chrome found; set CHROME_PATH.'); process.e
 
 const profile = await mkdtemp(join(tmpdir(), 'rret-smoke-'));
 const port = 9400 + Math.floor(Math.random() * 400);
-const chrome = spawn(chromePath, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-gpu', 'about:blank'], { stdio: 'ignore' });
+// CI containers on Linux have no user namespaces for Chrome's sandbox.
+const sandbox = process.platform === 'linux' && process.env.CI ? ['--no-sandbox'] : [];
+const chrome = spawn(chromePath, ['--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-gpu', ...sandbox, 'about:blank'], { stdio: 'ignore' });
 
 let targets;
-for (let i = 0; i < 60; i++) {
+for (let i = 0; i < 120; i++) { // up to 30 s: slow CI runners
   try { targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json(); if (targets.some(t => t.type === 'page')) break; } catch {}
   await sleep(250);
 }
-const ws = new WebSocket(targets.find(t => t.type === 'page').webSocketDebuggerUrl);
+const pageTarget = targets?.find(t => t.type === 'page');
+if (!pageTarget) { console.error('Chrome did not open a page within 30 s.'); chrome.kill(); process.exit(1); }
+const ws = new WebSocket(pageTarget.webSocketDebuggerUrl);
 await new Promise(r => ws.addEventListener('open', r, { once: true }));
 let msgId = 0; const pending = new Map(); const pageErrors = [];
 ws.addEventListener('message', (m) => {
