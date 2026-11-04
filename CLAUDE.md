@@ -63,5 +63,6 @@ npm ci && npm run lint   # ESLint (dev-only), incl. the no-unsanitized rule; CI 
 npm run test:all         # the tests CI runs
 ```
 
-Unsafe DOM sinks and unused variables are lint **warnings** for now (existing code); new code
-shouldn't add any. Errors (eval, undefined names, parse errors) fail CI.
+Unsafe DOM sinks (`innerHTML` and friends) are lint **errors**. The existing ones were reviewed
+and carry an `eslint-disable-next-line … -- reviewed: …` comment saying why they're safe; new ones
+must escape with `escapeHTML` (or use `textContent`) and say so the same way.

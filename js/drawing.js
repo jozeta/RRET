@@ -185,7 +185,7 @@ export class TargetDrawingCanvas {
       }
     });
 
-    const finish = (e) => {
+    const finish = (_e) => {
       if (!this.isDrawing) return;
       this.isDrawing = false;
       this.snapshot = null;

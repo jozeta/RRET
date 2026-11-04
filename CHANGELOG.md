@@ -8,6 +8,8 @@ these disagree.
 ## Unreleased
 
 - ESLint (flat config, with the no-unsanitized rule) as a dev-only tool; CI runs `npm run lint`
+- Reviewed all 22 `innerHTML` sites (all escape their strings); unsafe DOM sinks are now lint errors.
+  The reticle renderer keeps only a hex colour and a numeric opacity from stored settings
 
 ## 2.0.0 — 2026-11-01
 

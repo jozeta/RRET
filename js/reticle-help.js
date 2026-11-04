@@ -122,6 +122,7 @@ export class ReticleHelp {
     document.getElementById('reticle-help-title').textContent = d.name;
     document.getElementById('reticle-help-family').textContent = `${d.family} · ${d.scale}`;
     const list = (items, tag) => `<${tag} class="reticle-help-list">${items.map(i => `<li>${escapeHTML(i)}</li>`).join('')}</${tag}>`;
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     document.getElementById('reticle-help-body').innerHTML = `
       <figure class="reticle-help-figure">
         ${reticleDiagram(id)}

@@ -28,9 +28,9 @@ export default [
     files: ["**/*.test.*", "tests/**", "test/**", "examples/**", "scripts/**", "**/*.cjs", "*.config.*"],
     languageOptions: { globals: { ...globals.node } },
   },
-  { // Existing code: unsafe DOM sinks and unused variables are listed as warnings (fix them over time)
+  { // Unsafe DOM sinks are errors; the existing ones were reviewed and are marked inline with why
     rules: {
-      "no-unsanitized/property": "warn", "no-unsanitized/method": "warn",
+      "no-unsanitized/property": "error", "no-unsanitized/method": "error",  // existing sites reviewed and marked inline
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrors: "none" }],
       "no-empty": ["error", { allowEmptyCatch: true }],
       "no-redeclare": ["error", { builtinGlobals: false }],

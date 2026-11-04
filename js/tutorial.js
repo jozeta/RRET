@@ -132,6 +132,7 @@ export class TutorialController {
 
     const reticles = (this.app && this.app.reticles) || [];
     // Previews are drawn by the same engine as the scope, so they can't drift.
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     container.innerHTML = reticles.map(r => `
       <div class="col-md-6 col-lg-4 col-xl-3">
         <div class="reticle-preview-card d-flex flex-column">

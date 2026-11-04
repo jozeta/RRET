@@ -93,9 +93,11 @@ class Application {
     ).join('');
 
     const simSelect = document.getElementById('sim-reticle-select');
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     if (simSelect) simSelect.innerHTML = optionsHTML;
 
     const settingsSelect = document.querySelector('select[name="reticle-select"]');
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     if (settingsSelect) settingsSelect.innerHTML = optionsHTML;
   }
 
@@ -210,6 +212,7 @@ class Application {
           </tr>
         `;
       } else {
+        // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
         historyTableBody.innerHTML = history.slice(0, 15).map(h => {
           const d = new Date(h.timestamp);
           const dateStr = Number.isNaN(d.getTime()) ? '–'

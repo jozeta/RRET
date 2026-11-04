@@ -105,6 +105,7 @@ export class AnalyticsController {
       return;
     }
 
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     container.innerHTML = `
       <div class="row g-3 mb-3">
         <div class="col-md-4">

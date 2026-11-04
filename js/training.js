@@ -106,6 +106,7 @@ export class TrainingManager {
     const isAllActive = this.categoryFilter.size === 0;
     const button = (cat, active) =>
       `<button type="button" class="btn-zoom-step btn-filter-category ${active ? 'active' : ''}" data-category="${escapeHTML(cat)}" aria-pressed="${active}">${escapeHTML(cat)}</button>`;
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     container.innerHTML = [button('All', isAllActive), ...TARGET_CATEGORIES.map(cat => button(cat, this.categoryFilter.has(cat)))].join('');
 
     container.querySelectorAll('button[data-category]').forEach(btn => {
@@ -454,6 +455,7 @@ export class TrainingManager {
       lines.push(`In the scope the target measures ${s.milHeight.toFixed(2)} MIL tall and ${s.milWidth.toFixed(2)} MIL wide (see the orange brackets).`);
     }
     const math = document.getElementById('res-math-breakdown');
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     math.innerHTML = lines.map(l => `<div>${escapeHTML(l)}</div>`).join('');
 
     const coachEl = document.getElementById('res-coach');
@@ -461,6 +463,7 @@ export class TrainingManager {
       if (diagnostics) {
         const sign = (v) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
         const dimLabel = diagnostics.dimension === 'height' ? 'height' : 'width';
+        // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
         coachEl.innerHTML = `
           <div class="fw-semibold mb-1">Where the error came from</div>
           <div>Reading: you read <strong>${diagnostics.userMil.toFixed(2)} MIL</strong> (${dimLabel}); true is ${diagnostics.trueMil.toFixed(2)} MIL → <strong>${sign(diagnostics.readingErrorPct)}</strong></div>

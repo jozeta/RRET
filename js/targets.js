@@ -89,6 +89,7 @@ export class TargetsController {
   populateShapeOptions() {
     const select = document.getElementById('target-shape');
     if (!select) return;
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     select.innerHTML = CUSTOM_TARGET_SHAPES.map(s =>
       `<option value="${s.value}">${escapeHTML(s.label)}</option>`
     ).join('');
@@ -116,6 +117,7 @@ export class TargetsController {
 
     const height = parseFloat(document.getElementById('target-height')?.value) || 1;
     const width = parseFloat(document.getElementById('target-width')?.value) || 1;
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     preview.innerHTML = renderTargetSVGString(
       { svgType: shapeSelect.value, height, width, color: '#1e242b', borderColor: '#ffffff' },
       100, 100
@@ -178,6 +180,7 @@ export class TargetsController {
     if (!container) return;
 
     const categories = ['All', ...TARGET_CATEGORIES];
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     container.innerHTML = categories.map(cat => `
       <button type="button" class="btn btn-sm ${this.activeCategory === cat ? 'btn-tactical-primary' : 'btn-tactical-secondary'} me-1 mb-2" data-category="${escapeHTML(cat)}" aria-pressed="${this.activeCategory === cat}">
         ${escapeHTML(cat)}
@@ -219,6 +222,7 @@ export class TargetsController {
     }
 
     if (filtered.length === 0) {
+      // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
       grid.innerHTML = `
         <div class="col-12 text-center py-5 text-muted">
           <i class="bi bi-bullseye fs-1 d-block mb-3" aria-hidden="true"></i>
@@ -228,6 +232,7 @@ export class TargetsController {
       return;
     }
 
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     grid.innerHTML = filtered.map(t => {
       const heightMm = Math.round(t.height * 1000);
       const widthMm = Math.round(t.width * 1000);
@@ -569,6 +574,7 @@ export class TargetsController {
       this.editingColors = { color: t.color, borderColor: t.borderColor };
       if (t.imageData && isSafeImageDataURI(t.imageData)) {
         document.getElementById('target-image-data').value = t.imageData;
+        // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
         if (preview) preview.innerHTML = `<img src="${t.imageData}" alt="" style="max-height:100px; max-width:100%; border-radius:6px;"/>`;
         // Load the existing image so editing continues from it.
         if (this.drawCanvas) this.drawCanvas.loadFromDataURL(t.imageData).catch(() => {});

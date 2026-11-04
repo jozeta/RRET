@@ -104,6 +104,7 @@ export class StationController {
     if (!series.includes(this.setup.series)) this.setup.series = series[0] || '';
     const opt = (v, cur, label = v) => `<option value="${escapeHTML(String(v))}" ${String(v) === String(cur) ? 'selected' : ''}>${escapeHTML(String(label))}</option>`;
 
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     body.innerHTML = `
       <p class="small text-muted mb-3">Estimate the distance to each figure before time runs out. Results are shown only when the station is finished.</p>
       <div class="row g-2 mb-3">
@@ -167,6 +168,7 @@ export class StationController {
     const body = document.getElementById('station-body');
     if (!body) return;
     const n = this.state.figures.length;
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     body.innerHTML = `
       <div class="d-flex justify-content-between align-items-center mb-2">
         <span class="tactical-font text-tan-light" id="station-progress"></span>
@@ -300,6 +302,7 @@ export class StationController {
     const body = document.getElementById('station-body');
     if (!body) return;
     const max = figures.length * 100;
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     body.innerHTML = `
       <div class="mb-2 ${timeUp ? 'text-warning' : 'text-success'} tactical-font">${timeUp ? 'Time is up' : 'Station complete'}: ${total} of ${max} points</div>
       <div class="table-responsive">
@@ -349,6 +352,7 @@ export class StationController {
     };
     const sizeStr = (m) => unit === 'imperial' ? `${(m * 39.3701).toFixed(1)} in` : `${Math.round(m * 1000)} mm`;
 
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     area.innerHTML = `
       <h1>RRET range card: ${escapeHTML(series)}</h1>
       <p>Distance (${unit === 'imperial' ? 'yards' : 'meters'}) = figure height × ${unit === 'imperial' ? '27.78 (inches)' : '1000 (meters)'} ÷ MIL reading of the figure's <strong>height</strong>. Blank cells are outside the figure's competition window.</p>

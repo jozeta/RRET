@@ -1080,12 +1080,16 @@ export class ScopeEngine {
    */
   renderReticleSVG() {
     if (!this.svgContainer || !this.canvasSize) return;
-    const size = this.canvasSize;
-    const color = this.reticleColor || '#111111';
+    const size = Number(this.canvasSize) || 0;
+    // Settings come from storage: keep only a hex colour and a numeric opacity in the markup.
+    const color = /^#[0-9a-f]{6}$/i.test(this.reticleColor) ? this.reticleColor : '#111111';
+    const b = Number(this.reticleBrightness);
+    const opacity = Number.isFinite(b) ? Math.min(1, Math.max(0, b)) : 1;
     // Illuminated colours get a faint glow; a black etched reticle stays plain.
     const illuminated = !/^#(0|1)[0-9a-f]{5}$/i.test(color);
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     this.svgContainer.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" style="opacity: ${this.reticleBrightness};">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" style="opacity: ${opacity};">
         <defs>
           <filter id="reticleHalo" x="-5%" y="-5%" width="110%" height="110%">
             <feGaussianBlur stdDeviation="1.1" result="b"/>

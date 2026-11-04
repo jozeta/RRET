@@ -437,7 +437,7 @@ function prsPopper(a, w, h) {
 }
 
 const PAPER_ZONES = {
-  ipsc_metric(w) { // A/C/D zone perforations (thin dashed lines)
+  ipsc_metric(_w) { // A/C/D zone perforations (thin dashed lines)
     return `<rect x="15" y="-58" width="15" height="29" fill="none" stroke="rgba(60,40,20,0.45)" stroke-width="0.4" stroke-dasharray="1.2 1"/>
       <rect x="18.75" y="-73" width="7.5" height="5" fill="none" stroke="rgba(60,40,20,0.45)" stroke-width="0.4" stroke-dasharray="1.2 1"/>
       <polygon points="7.5,-6 37.5,-6 37.5,-44 31,-56 14,-56 7.5,-44" fill="none" stroke="rgba(60,40,20,0.35)" stroke-width="0.4" stroke-dasharray="1.2 1"/>`;

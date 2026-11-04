@@ -120,6 +120,7 @@ export class SharedSetController {
     const banner = document.getElementById('shared-set-banner');
     if (banner) {
       banner.hidden = false;
+      // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
       banner.innerHTML = `<strong>Set complete.</strong> ${r.length} of ${n} answered, ${within} within 5%, mean error ${mean.toFixed(1)}%. <button type="button" class="btn-link-help" data-leave-set>Back to free practice</button>`;
     }
     this.active.index = n; // stays "done" until left
@@ -138,6 +139,7 @@ export class SharedSetController {
     if (!banner || !this.active) return;
     const { index, scenarios } = this.active;
     banner.hidden = false;
+    // eslint-disable-next-line no-unsanitized/property -- reviewed: strings escaped with escapeHTML, other values numeric or fixed; imported targets re-validated
     banner.innerHTML = `Shared set: target <strong>${index + 1} of ${scenarios.length}</strong>. <button type="button" class="btn-link-help" data-leave-set>Leave set</button>`;
   }
 
