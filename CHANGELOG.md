@@ -7,6 +7,11 @@ these disagree.
 
 ## Unreleased
 
+## 2.1.0 — 2026-11-08
+
+- Låda Glass family look (1.1.0, vendored): frosted-glass panels on the Låda backdrop, Låda colours,
+  type and radii, with the birch-gold accent keeping the brass. Scope, reticle and target drawings
+  keep their colours. The offline cache is renamed, so installed copies pick up the new files
 - ESLint (flat config, with the no-unsanitized rule) as a dev-only tool; CI runs `npm run lint`
 - Reviewed all 22 `innerHTML` sites (all escape their strings); unsafe DOM sinks are now lint errors.
   The reticle renderer keeps only a hex colour and a numeric opacity from stored settings

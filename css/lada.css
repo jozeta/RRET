@@ -1,0 +1,35 @@
+/* Låda Glass family look (design=family in .claude-standards). Loaded last: points the app's own
+   variables at the Låda Glass tokens (vendor/lada-glass/), with the birch-gold accent keeping
+   RRET's brass. RRET stays dark (data-bs-theme="dark"). Scope, reticle and target drawings keep
+   their own colours. */
+:root, [data-bs-theme] {
+  --bg: var(--lg-bg);
+  --panel: var(--lg-glass);
+  --raised: var(--lg-glass-strong);
+  --sunken: var(--lg-field);
+  --ink: var(--lg-text);
+  --ink-2: color-mix(in srgb, var(--lg-text) 82%, var(--lg-muted));
+  --muted: var(--lg-muted);
+  --line: var(--lg-line);
+  --line-strong: var(--lg-line-2);
+  --brass: var(--lg-accent);
+  --brass-hover: color-mix(in srgb, var(--lg-accent) 85%, var(--lg-text));
+  --brass-ink: var(--lg-on-accent);
+  --brass-soft: color-mix(in srgb, var(--lg-accent) 14%, transparent);
+  --orange-glow: color-mix(in srgb, var(--lg-accent) 25%, transparent);
+  --good: var(--lg-ok-text);
+  --warn: var(--lg-warn-text);
+  --bad: var(--lg-bad-text);
+  --radius-s: var(--lg-radius-control);
+  --radius-m: var(--lg-radius-card);
+  --font: var(--lg-font);
+}
+/* Frosted surfaces. Not on .card-tactical: a backdrop-filter makes an element the containing block
+   for position:fixed children, and the simulator card holds the phone answer bar (see style.css). */
+.stat-box, .target-card, .learn-hero, .diagram-card, .modal-content-tactical, .rret-toast {
+  -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
+}
+.navbar-tactical {
+  background: var(--lg-glass-strong) !important; -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
+}
+.sim-answer-bar { background: var(--lg-glass-strong) !important; -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }

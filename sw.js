@@ -2,9 +2,10 @@
    tests/pwa.test.mjs checks that every app file is precached. Bump CACHE_VERSION
    when files are added/removed or vendor assets are upgraded. */
 // Keep in sync with js/version.js (enforced by tests/version.test.mjs).
-const CACHE_VERSION = 'rret-2.0.0';
+const CACHE_VERSION = 'rret-2.1.0';
 const PRECACHE = [
   './',
+  'css/lada.css',
   'css/learn.css',
   'css/scope.css',
   'css/style.css',
@@ -45,7 +46,9 @@ const PRECACHE = [
   'vendor/fonts/Archivo-latin-4c98b9d490.woff2',
   'vendor/fonts/Archivo-latin-ext-a75c792f98.woff2',
   'vendor/fonts/RobotoMono-2ed6ac9efa.woff2',
-  'vendor/fonts/fonts.css'
+  'vendor/fonts/fonts.css',
+  'vendor/lada-glass/1.1.0/lada-glass-bootstrap.css',
+  'vendor/lada-glass/1.1.0/lada-glass.css'
 ];
 
 self.addEventListener('install', (event) => {

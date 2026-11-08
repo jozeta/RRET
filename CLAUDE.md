@@ -53,6 +53,15 @@ Core formula: `distance (m) = size (m) × 1000 / MIL reading` (height or width).
   size-limited and idempotent (built-ins never duplicated).
 - Hunting-category targets always roll Forest or Mountain environments.
 
+## Look (Låda Glass)
+
+`design=family`: the shared Låda Glass look from `vendor/lada-glass/<version>/` (`lada-glass.css`
+plus the Bootstrap bridge), loaded after the app's CSS, with the birch-gold accent. `css/lada.css`
+points RRET's variables (`--bg`, `--panel`, `--ink`, `--brass`, …) at the Låda tokens. Don't put
+`backdrop-filter` on `.card-tactical` or other ancestors of the phone answer bar: it would become the
+containing block for that `position: fixed` bar (the phone layout browser check catches it). New CSS
+files must be added to `sw.js` PRECACHE (tests/pwa.test.mjs).
+
 ## App standards
 
 This repo follows the app standards in `~/Desktop/code/tools/standards/STANDARDS.md` (rule IDs,
