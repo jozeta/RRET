@@ -20,7 +20,7 @@ export const HISTORY_LIMIT = 1000;
 const DEFAULT_SETTINGS = {
   reticle: 'mil_dot',
   unit: 'metric',
-  theme: 'dark-tactical',
+  theme: 'lada-glass',
   reticleColor: '#111111', // black etched; illuminated colours are options
   reticleBrightness: 1.0,
   zoomSensitivity: 1.0,

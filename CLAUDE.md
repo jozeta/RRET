@@ -61,6 +61,8 @@ points RRET's variables (`--bg`, `--panel`, `--ink`, `--brass`, …) at the Låd
 `backdrop-filter` on `.card-tactical` or other ancestors of the phone answer bar: it would become the
 containing block for that `position: fixed` bar (the phone layout browser check catches it). New CSS
 files must be added to `sw.js` PRECACHE (tests/pwa.test.mjs).
+The colour themes in Settings (`THEMES` in `js/settings.js`) set the same variables inline and win
+over `lada.css`; `lada-glass` is the default theme and points them at the Låda tokens.
 
 ## App standards
 

@@ -7,6 +7,14 @@ these disagree.
 
 ## Unreleased
 
+## 2.1.1 — 2026-11-08
+
+- Låda Glass 1.1.1: RRET stays fully dark on a Mac in light mode (1.1.0 gave it light accent-text
+  colours there)
+- "Låda Glass" is a colour theme in Settings and the default, so the page background, panels and
+  accent follow the family look (in 2.1.0 the default Spruce theme still set its own). Spruce, Olive,
+  Sand and High contrast stay selectable; a theme you picked before is kept
+
 ## 2.1.0 — 2026-11-08
 
 - Låda Glass family look (1.1.0, vendored): frosted-glass panels on the Låda backdrop, Låda colours,

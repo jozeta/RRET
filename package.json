@@ -1,6 +1,6 @@
 {
   "name": "rret",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "private": true,
   "description": "Rifle Range Estimation Trainer: FFP MIL scope simulator for range estimation practice.",
   "type": "module",

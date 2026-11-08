@@ -14,6 +14,8 @@ const DEFAULT_CALIB_PX = Math.round((96 / 25.4) * CARD_WIDTH_MM);
  * the previous one behind (audit BUG-019).
  */
 const THEMES = {
+  // The Låda Glass family look (default): the shared tokens from vendor/lada-glass/.
+  'lada-glass': { '--bg': 'var(--lg-bg)', '--panel': 'var(--lg-glass)', '--raised': 'var(--lg-glass-strong)', '--sunken': 'var(--lg-field)', '--brass': 'var(--lg-accent)', '--brass-hover': 'color-mix(in srgb, var(--lg-accent) 85%, var(--lg-text))' },
   'dark-tactical': { '--bg': '#18201d', '--panel': '#202a26', '--raised': '#28332e', '--sunken': '#141a18', '--brass': '#c9a55a', '--brass-hover': '#d8b670' },
   'military-olive': { '--bg': '#1b1f17', '--panel': '#23291e', '--raised': '#2c3326', '--sunken': '#161a13', '--brass': '#c2b06a', '--brass-hover': '#d2c07c' },
   'desert-tan': { '--bg': '#1f1b17', '--panel': '#28231e', '--raised': '#322b25', '--sunken': '#191612', '--brass': '#d6a86a', '--brass-hover': '#e2b87e' },
@@ -143,7 +145,7 @@ export class SettingsController {
   }
 
   applyTheme(themeName) {
-    const name = THEMES[themeName] ? themeName : 'dark-tactical';
+    const name = THEMES[themeName] ? themeName : 'lada-glass';
     document.body.classList.remove(...Object.keys(THEMES).map(t => `theme-${t}`));
     document.body.classList.add(`theme-${name}`);
     const root = document.documentElement;
