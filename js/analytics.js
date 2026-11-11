@@ -214,8 +214,8 @@ export class AnalyticsController {
     const rows = (list) => list.map(r => `<tr><th scope="row">${escapeHTML(r.label)}</th><td>${r.rounds}</td><td>${r.meanErrorPct.toFixed(1)}%</td><td>${r.bias >= 0 ? '+' : ''}${r.bias.toFixed(1)}%</td></tr>`).join('');
     const head = (first) => `<thead><tr><th scope="col">${first}</th><th scope="col">Rounds</th><th scope="col">Mean error</th><th scope="col">Bias</th></tr></thead>`;
     return `
-      <table class="table table-dark table-sm mt-2">${head('Category')}<tbody>${rows(a.byCategory)}</tbody></table>
-      <table class="table table-dark table-sm">${head('Distance band')}<tbody>${rows(a.byBand)}</tbody></table>`;
+      <div class="table-responsive mt-2 mb-3"><table class="table table-dark table-sm mb-0">${head('Category')}<tbody>${rows(a.byCategory)}</tbody></table></div>
+      <div class="table-responsive mb-3"><table class="table table-dark table-sm mb-0">${head('Distance band')}<tbody>${rows(a.byBand)}</tbody></table></div>`;
   }
 
   bindTooltips(container) {

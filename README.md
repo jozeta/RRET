@@ -8,6 +8,15 @@
 **RRET (Rifle Range Estimation Trainer)** is a modern, high-precision First Focal Plane (FFP) scope simulator and distance estimation interactive web application. Designed for precision shooters, field competitors, snipers, and long-range enthusiasts, RRET provides real-world field scenarios to train distance estimation using MIL/MRAD reticle subtensions.
 
 **🔗 Try it live: [jozeta.github.io/RRET](https://jozeta.github.io/RRET/)** — no install or setup required, runs entirely in your browser.
+**Version 2.2.0** (shown in the app's footer and About page).
+
+### What's new in 2.2.0
+
+- The Låda Glass 2.0.0 look: glass panels with a real edge and a soft top light, rounder corners,
+  a lit primary button, and history and progress tables in rounded frames.
+- Installed (offline) copies update to the new files on the next online visit.
+
+Older versions: see [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

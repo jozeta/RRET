@@ -33,3 +33,9 @@
   background: var(--lg-glass-strong) !important; -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur);
 }
 .sim-answer-bar { background: var(--lg-glass-strong) !important; -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
+/* Låda Glass 2: .table-responsive is a bordered, rounded frame. A table that fills a padding-free
+   card body already sits inside the card's frame, so it drops its own border and keeps the card's
+   bottom corners. */
+.card-tactical > .card-body.p-0 > .table-responsive {
+  border: 0; border-radius: 0 0 var(--lg-radius-card) var(--lg-radius-card);
+}

@@ -7,6 +7,17 @@ these disagree.
 
 ## Unreleased
 
+## 2.2.0 — 2026-11-11
+
+- Låda Glass 2.0.0 (vendored in `vendor/lada-glass/2.0.0/`, replacing 1.1.1): glass panels get a
+  faint gradient, a real 1 px edge, a soft top light and a layered shadow; corners are rounder
+  (controls 9 px, cards 12 px); the primary button is lit; Bootstrap cards, modals, tables and
+  buttons take the 2.0 look through the updated bridge
+- Tables sit in rounded frames: the Progress tables are now wrapped in `.table-responsive`, and the
+  Recent rounds table uses its card's frame instead of drawing a second border inside it
+- The offline cache is renamed (`rret-2.2.0`) and precaches the new files, so installed copies
+  pick them up; the app's own toasts are unchanged (they don't use the Låda toast)
+
 ## 2.1.1 — 2026-11-08
 
 - Låda Glass 1.1.1: RRET stays fully dark on a Mac in light mode (1.1.0 gave it light accent-text
